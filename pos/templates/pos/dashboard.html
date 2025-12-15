@@ -1,0 +1,40 @@
+{% extends 'pos/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="space-y-6">
+    <h2 class="text-3xl font-bold text-brand-500">Dashboard</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Card 1 -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-brand-200">
+            <h3 class="text-sm font-semibold text-gray-500 uppercase">Ventas Hoy</h3>
+            <p class="text-3xl font-bold text-brand-500">${{ today_sales|intcomma }}</p>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-brand-200">
+            <h3 class="text-sm font-semibold text-gray-500 uppercase">Cartera (Crédito)</h3>
+            <p class="text-3xl font-bold text-red-500">${{ debt_pending|intcomma }}</p>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-brand-200">
+            <h3 class="text-sm font-semibold text-gray-500 uppercase">Total Historico</h3>
+            <p class="text-3xl font-bold text-brand-400">${{ total_sales|intcomma }}</p>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-brand-200 p-6 overflow-hidden">
+        <h3 class="text-lg font-bold mb-4">Acciones Rápidas</h3>
+        <div class="flex gap-4">
+            <a href="{% url 'pos' %}"
+                class="flex-1 bg-brand-500 text-white text-center py-3 rounded-lg hover:bg-brand-400 transition">Nueva
+                Venta</a>
+            <a href="{% url 'inventory' %}"
+                class="flex-1 bg-brand-300 text-brand-500 text-center py-3 rounded-lg hover:bg-brand-200 transition">Ver
+                Inventario</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

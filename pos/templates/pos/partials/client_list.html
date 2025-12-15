@@ -1,0 +1,26 @@
+{% load humanize %}
+{% for client in clients %}
+<div class="bg-white p-4 rounded-xl shadow-sm border border-brand-200">
+    <div class="flex justify-between items-start mb-2">
+        <div>
+            <h3 class="font-bold text-lg text-brand-500">{{ client.name }}</h3>
+            <p class="text-sm text-gray-500">{{ client.phone }}</p>
+        </div>
+        <a href="{% url 'client_statement' client.id %}"
+            class="bg-brand-200 text-brand-500 text-xs px-2 py-1 rounded hover:bg-brand-300">
+            Estado de Cuenta
+        </a>
+    </div>
+
+    <div class="mt-2 pt-2 border-t border-brand-100 flex justify-between text-sm">
+        <span class="text-gray-400">Deuda actual:</span>
+        <span class="font-bold {% if client.balance > 0 %}text-red-500{% else %}text-green-500{% endif %}">
+            ${{ client.balance|intcomma }}
+        </span>
+    </div>
+</div>
+{% empty %}
+<div class="col-span-full text-center py-10 text-gray-400">
+    No hay clientes registrados.
+</div>
+{% endfor %}

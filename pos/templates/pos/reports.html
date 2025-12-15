@@ -1,0 +1,168 @@
+{% extends 'pos/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <h2 class="text-3xl font-bold text-brand-500">Informes y Analítica</h2>
+
+        <!-- Date Filter Form -->
+        <form method="get"
+            class="bg-white p-3 rounded-xl shadow-sm border border-brand-200 flex flex-wrap gap-2 items-end">
+            <div>
+                <label class="block text-xs text-gray-400">Inicio</label>
+                <input type="date" name="date_start" value="{{ date_start }}"
+                    class="border border-brand-200 rounded px-2 py-1 text-sm text-gray-600 focus:outline-none focus:border-brand-500">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-400">Fin</label>
+                <input type="date" name="date_end" value="{{ date_end }}"
+                    class="border border-brand-200 rounded px-2 py-1 text-sm text-gray-600 focus:outline-none focus:border-brand-500">
+            </div>
+            <button type="submit"
+                class="bg-brand-500 text-white px-4 py-1.5 rounded text-sm hover:bg-brand-400 transition font-bold">
+                Filtrar
+            </button>
+        </form>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-brand-200">
+            <h3 class="text-xs font-bold text-gray-400 uppercase">Ventas Totales</h3>
+            <p class="text-2xl font-bold text-brand-500">${{ total_period|intcomma }}</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-brand-200">
+            <h3 class="text-xs font-bold text-gray-400 uppercase">Ticket Promedio</h3>
+            <p class="text-2xl font-bold text-brand-500">${{ avg_ticket|floatformat:0|intcomma }}</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-brand-200">
+            <h3 class="text-xs font-bold text-gray-400 uppercase">En Efectivo</h3>
+            <p class="text-2xl font-bold text-green-500">${{ cash_total|intcomma }}</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-brand-200">
+            <h3 class="text-xs font-bold text-gray-400 uppercase">A Crédito</h3>
+            <p class="text-2xl font-bold text-red-500">${{ credit_total|intcomma }}</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Sales Trend Chart -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-brand-200">
+            <h3 class="font-bold text-gray-700 mb-4">Comportamiento Diario</h3>
+            <canvas id="salesChart"></canvas>
+        </div>
+
+        <!-- Top Products Chart -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-brand-200">
+            <h3 class="font-bold text-gray-700 mb-4">Top 10 Productos (Unidades)</h3>
+            <div class="h-64 flex justify-center">
+                <canvas id="productsChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invoice History Table -->
+    <div class="bg-white rounded-xl shadow-sm border border-brand-200 overflow-hidden">
+        <div class="p-6 border-b border-brand-100 flex justify-between items-center">
+            <h3 class="font-bold text-gray-700">Historial de Facturas</h3>
+            <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">{{ invoices|length }} facturas en
+                periodo</span>
+        </div>
+
+        <!-- Search within results functionality could be added nicely here with HTMX, but let's stick to standard for now -->
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-brand-100 text-brand-600">
+                    <tr>
+                        <th class="p-4"># Factura</th>
+                        <th class="p-4">Fecha</th>
+                        <th class="p-4">Cliente</th>
+                        <th class="p-4">Método</th>
+                        <th class="p-4 text-right">Total</th>
+                        <th class="p-4 text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for invoice in invoices %}
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="p-4 font-bold text-gray-600 font-mono">{{ invoice.id }}</td>
+                        <td class="p-4 text-gray-500">{{ invoice.date|date:"d/m/Y H:i" }}</td>
+                        <td class="p-4 font-medium">{{ invoice.client.name }}</td>
+                        <td class="p-4">
+                            {% if invoice.payment_method == 'CASH' %}
+                            <span
+                                class="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">Contado</span>
+                            {% else %}
+                            <span
+                                class="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-bold">Crédito</span>
+                            {% endif %}
+                        </td>
+                        <td class="p-4 text-right font-bold text-gray-700">${{ invoice.total|intcomma }}</td>
+                        <td class="p-4 text-center">
+                            <a href="{% url 'invoice_detail' invoice.id %}" target="_blank"
+                                class="text-brand-500 hover:text-brand-600 font-bold text-xs hover:underline">
+                                👁️ Ver / Imprimir
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="p-8 text-center text-gray-400">No hay ventas registradas en este periodo.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Sales Line Chart
+    const ctxSales = document.getElementById('salesChart').getContext('2d');
+    new Chart(ctxSales, {
+        type: 'line',
+        data: {
+            labels: {{ labels_dates| safe }},
+        datasets: [{
+            label: 'Ventas ($)',
+            data: {{ data_sales| safe }},
+        borderColor: '#5592a3',
+        backgroundColor: 'rgba(85, 146, 163, 0.1)',
+        tension: 0.4,
+        fill: true
+            }]
+        },
+        options: {
+        responsive: true,
+        plugins: { legend: { display: false } }
+    }
+    });
+
+    // Products Pie Chart
+    const ctxProducts = document.getElementById('productsChart').getContext('2d');
+    new Chart(ctxProducts, {
+        type: 'doughnut',
+        data: {
+            labels: {{ labels_products| safe }},
+        datasets: [{
+            data: {{ data_products| safe }},
+        backgroundColor: [
+            '#5592a3', '#3f897a', '#cddecc', '#e7ecda', '#2c5d55',
+            '#8badb8', '#a4c5c8', '#6b9ea8', '#42756d', '#1f4740'
+        ],
+        borderWidth: 0
+            }]
+        },
+        options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'right' }
+        }
+    }
+    });
+</script>
+{% endblock %}

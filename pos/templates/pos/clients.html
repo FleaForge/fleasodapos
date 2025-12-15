@@ -1,0 +1,67 @@
+{% extends 'pos/base.html' %}
+
+{% block content %}
+<div class="space-y-4">
+    <div class="flex justify-between items-center" x-data="{ open: false }">
+        <h2 class="text-2xl font-bold text-brand-500">Clientes</h2>
+        <button @click="open = true" class="bg-brand-500 text-white px-4 py-2 rounded-lg hover:bg-brand-400 transition">
+            + Nuevo Cliente
+        </button>
+
+        <!-- Modal -->
+        <div x-show="open" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+            style="display: none;">
+            <div class="bg-white p-6 rounded-xl shadow-xl w-full max-w-md mx-4" @click.away="open = false">
+                <h3 class="text-xl font-bold mb-4 text-brand-500">Nuevo Cliente</h3>
+                <form action="{% url 'add_client' %}" method="POST">
+                    {% csrf_token %}
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm text-gray-600">Nombre</label>
+                            <input type="text" name="name" class="w-full p-2 border rounded-lg" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600">Teléfono</label>
+                            <input type="text" name="phone" class="w-full p-2 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600">Email</label>
+                            <input type="email" name="email" class="w-full p-2 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600">Dirección</label>
+                            <input type="text" name="address" class="w-full p-2 border rounded-lg">
+                        </div>
+                        <div class="pt-2 border-t border-gray-100">
+                            <label class="block text-sm font-bold text-red-500">Deuda / Saldo Inicial (Opcional)</label>
+                            <input type="number" name="initial_debt" placeholder="0"
+                                class="w-full p-2 border border-red-200 bg-red-50 text-red-600 font-bold rounded-lg">
+                            <p class="text-xs text-gray-400 mt-1">Si el cliente ya debe dinero de antes, ingrésalo aquí.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex justify-end gap-2">
+                        <button type="button" @click="open = false"
+                            class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">cancelar</button>
+                        <button type="submit"
+                            class="px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-400">Guardar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search -->
+    <div class="relative">
+        <input type="text" name="search" placeholder="Buscar clientes..."
+            class="w-full p-4 pl-12 rounded-xl border border-brand-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            hx-get="{% url 'clients' %}" hx-trigger="keyup changed delay:500ms, search" hx-target="#client-list">
+        <span class="absolute left-4 top-4 text-gray-400">🔍</span>
+    </div>
+
+    <!-- Client List -->
+    <div id="client-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">
+        {% include 'pos/partials/client_list.html' %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+{% load humanize %}
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factura #{{ sale.id }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+
+            body {
+                background: white;
+            }
+
+            .print-container {
+                box-shadow: none;
+                border: none;
+                padding: 0;
+                max-width: 100%;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen p-4 md:p-8 flex items-center justify-center">
+
+    <div class="bg-white p-8 rounded-xl shadow-xl max-w-lg w-full print-container relative">
+
+        <!-- Watermark if Credit -->
+        {% if sale.payment_method == 'CREDIT' %}
+        <div class="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden">
+            <span
+                class="text-red-500 opacity-10 font-bold text-9xl transform -rotate-45 border-4 border-red-500 rounded-xl p-4">CRÉDITO</span>
+        </div>
+        {% endif %}
+
+        <div class="text-center mb-8 border-b pb-6">
+            <h1 class="text-2xl font-bold text-gray-800">FleasoDaPos Papelería</h1>
+            <p class="text-gray-500 text-sm">NIT: 123456789-0</p>
+            <p class="text-gray-500 text-sm">Calle 3 2 01 La Playa</p>
+            <p class="text-gray-500 text-sm mb-4">Tel: 3208581391</p>
+
+            <div class="flex justify-between items-center text-sm font-bold text-gray-700 bg-gray-50 p-2 rounded">
+                <span>Factura de Venta</span>
+                <span>#{{ sale.id }}</span>
+            </div>
+        </div>
+
+        <div class="mb-6 text-sm">
+            <div class="flex justify-between mb-1">
+                <span class="text-gray-500">Cliente:</span>
+                <span class="font-bold text-gray-800">{{ sale.client.name }}</span>
+            </div>
+            <div class="flex justify-between mb-1">
+                <span class="text-gray-500">Fecha:</span>
+                <span>{{ sale.date|date:"d/m/Y H:i" }}</span>
+            </div>
+            <div class="flex justify-between mb-1">
+                <span class="text-gray-500">Método de Pago:</span>
+                <span>
+                    {% if sale.payment_method == 'CASH' %}Contado{% else %}Crédito{% endif %}
+                </span>
+            </div>
+        </div>
+
+        <table class="w-full text-sm mb-6">
+            <thead class="border-b border-gray-300">
+                <tr class="text-left font-bold text-gray-600">
+                    <th class="pb-2">Cant.</th>
+                    <th class="pb-2">Descripción</th>
+                    <th class="pb-2 text-right">Total</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for item in sale.items.all %}
+                <tr>
+                    <td class="py-2 text-gray-500 w-12">{{ item.quantity }}</td>
+                    <td class="py-2 text-gray-800">
+                        {{ item.product.name }}
+                        <div class="text-xs text-gray-400">@ ${{ item.price|intcomma }}</div>
+                    </td>
+                    <td class="py-2 text-right font-bold text-gray-700">${{ item.subtotal|intcomma }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="border-t border-gray-300 pt-4 flex justify-between items-center text-xl font-bold text-gray-800">
+            <span>Total:</span>
+            <span>${{ sale.total|intcomma }}</span>
+        </div>
+
+        <div class="mt-8 text-center text-xs text-gray-400">
+            <p>Gracias por su compra</p>
+            <p class="mt-1">Sistema FleasoDaPos</p>
+        </div>
+
+        <!-- Controls -->
+        <div class="mt-8 flex justify-center gap-4 no-print">
+            <button onclick="window.close()"
+                class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Cerrar</button>
+            <button onclick="window.print()"
+                class="px-4 py-2 bg-brand-500 text-white font-bold rounded hover:bg-brand-400">Imprimir</button>
+        </div>
+
+    </div>
+</body>
+
+</html>

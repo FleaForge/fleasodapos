@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - FleasoDaPos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            100: '#f9f9f5',
+                            200: '#e7ecda',
+                            300: '#cddecc',
+                            400: '#3f897a',
+                            500: '#5592a3',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-brand-100 min-h-screen flex items-center justify-center p-4 text-brand-500 font-sans">
+
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-brand-200">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold mb-2">FleasoDaPos</h1>
+            <p class="text-gray-400 text-sm">Ingresa para administrar</p>
+        </div>
+
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+
+            {% if form.errors %}
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative text-sm">
+                Usuario o contraseña incorrectos.
+            </div>
+            {% endif %}
+
+            <div>
+                <label class="block text-sm font-bold mb-2 ml-1">Usuario</label>
+                <input type="text" name="username"
+                    class="w-full px-4 py-3 rounded-xl bg-brand-100 border-none focus:ring-2 focus:ring-brand-500 focus:outline-none transition"
+                    placeholder="admin" required autofocus>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold mb-2 ml-1">Contraseña</label>
+                <input type="password" name="password"
+                    class="w-full px-4 py-3 rounded-xl bg-brand-100 border-none focus:ring-2 focus:ring-brand-500 focus:outline-none transition"
+                    placeholder="••••••••" required>
+            </div>
+
+            <button type="submit"
+                class="w-full bg-brand-500 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-brand-400 transition transform active:scale-95">
+                Ingresar
+            </button>
+        </form>
+
+        <div class="mt-8 text-center border-t border-brand-100 pt-4">
+            <a href="{% url 'public_search' %}" class="text-sm text-brand-400 hover:text-brand-500 underline">
+                ¿Eres cliente? Consulta tu estado aquí
+            </a>
+        </div>
+    </div>
+
+</body>
+
+</html>

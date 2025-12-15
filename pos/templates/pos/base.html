@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FleasoDaPos</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            100: '#f9f9f5',
+                            200: '#e7ecda',
+                            300: '#cddecc',
+                            400: '#3f897a',
+                            500: '#5592a3',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="//unpkg.com/alpinejs" defer></script>
+</head>
+
+<body class="bg-brand-100 min-h-screen pb-16 md:pb-0 font-sans text-brand-500">
+
+    <!-- Desktop Sidebar / Mobile Hide -->
+    <div class="hidden md:flex flex-col w-64 fixed inset-y-0 bg-white border-r border-brand-200">
+        <div class="h-16 flex items-center justify-center border-b border-brand-200">
+            <h1 class="text-2xl font-bold text-brand-500">POS System</h1>
+        </div>
+        <nav class="flex-1 p-4 space-y-2">
+            <a href="{% url 'dashboard' %}"
+                class="flex items-center px-4 py-2 text-brand-500 hover:bg-brand-200 rounded-lg">
+                Inicio
+            </a>
+            <a href="{% url 'pos' %}" class="flex items-center px-4 py-2 text-brand-500 hover:bg-brand-200 rounded-lg">
+                Vender (POS)
+            </a>
+            <a href="{% url 'inventory' %}"
+                class="flex items-center px-4 py-2 text-brand-500 hover:bg-brand-200 rounded-lg">
+                Inventario
+            </a>
+            <a href="{% url 'clients' %}"
+                class="flex items-center px-4 py-2 text-brand-500 hover:bg-brand-200 rounded-lg">
+                Clientes
+            </a>
+            <a href="{% url 'reports' %}"
+                class="flex items-center px-4 py-2 text-brand-500 hover:bg-brand-200 rounded-lg">
+                Informes
+            </a>
+            <form action="{% url 'logout' %}" method="post" class="mt-auto">
+                {% csrf_token %}
+                <button type="submit"
+                    class="w-full flex items-center px-4 py-2 text-red-500 hover:bg-red-100 rounded-lg transition">
+                    Cerrar Sesión
+                </button>
+            </form>
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <main class="md:ml-64 p-4 min-h-screen">
+        {% if messages %}
+        <div class="fixed top-4 right-4 z-50 space-y-2">
+            {% for message in messages %}
+            <div class="bg-brand-400 text-white px-4 py-2 rounded-lg shadow-lg" x-data="{show: true}" x-show="show"
+                x-init="setTimeout(() => show = false, 3000)">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Mobile Bottom Nav -->
+    <div class="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-brand-200 flex justify-around p-2 z-40">
+        <a href="{% url 'dashboard' %}" class="flex flex-col items-center text-xs text-brand-500">
+            <span class="text-xl">🏠</span>
+            <span>Inicio</span>
+        </a>
+        <a href="{% url 'pos' %}" class="flex flex-col items-center text-xs text-brand-500">
+            <span class="text-xl">🛒</span>
+            <span>POS</span>
+        </a>
+        <a href="{% url 'inventory' %}" class="flex flex-col items-center text-xs text-brand-500">
+            <span class="text-xl">📦</span>
+            <span>Items</span>
+        </a>
+        <a href="{% url 'clients' %}" class="flex flex-col items-center text-xs text-brand-500">
+            <span class="text-xl">👥</span>
+            <span>Clientes</span>
+        </a>
+        <a href="{% url 'reports' %}" class="flex flex-col items-center text-xs text-brand-500">
+            <span class="text-xl">📊</span>
+            <span>Informes</span>
+        </a>
+        <form action="{% url 'logout' %}" method="post" class="flex flex-col items-center text-xs text-red-400">
+            {% csrf_token %}
+            <button type="submit" class="flex flex-col items-center">
+                <span class="text-xl">🚪</span>
+                <span>Salir</span>
+            </button>
+        </form>
+    </div>
+
+    <!-- Use this for CSRF in HTMX -->
+    <script>
+        document.body.addEventListener('htmx:configRequest', (event) => {
+            event.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
+        });
+
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('SW registered!', reg))
+                    .catch(err => console.log('SW failed', err));
+            });
+        }
+    </script>
+</body>
+
+</html>

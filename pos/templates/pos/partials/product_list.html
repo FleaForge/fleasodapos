@@ -1,0 +1,32 @@
+{% load humanize %}
+{% for product in products %}
+<div class="bg-white p-4 rounded-xl shadow-sm border border-brand-200 flex flex-col justify-between">
+    <div>
+        <div class="h-32 bg-brand-100 rounded-lg mb-4 flex items-center justify-center text-brand-300">
+            {% if product.image %}
+            <img src="{{ product.image.url }}" class="h-full w-full object-cover rounded-lg">
+            {% else %}
+            <span class="text-4xl">📷</span>
+            {% endif %}
+        </div>
+        <h3 class="font-bold text-lg text-brand-500 leading-tight">{{ product.name }}</h3>
+        <p class="text-sm text-gray-500">{{ product.barcode }}</p>
+    </div>
+    <div class="mt-4 flex justify-between items-end">
+        <div>
+            <span class="text-xs text-gray-400">Precio</span>
+            <p class="text-xl font-bold text-brand-400">${{ product.price|intcomma }}</p>
+        </div>
+        <div class="text-right">
+            <span class="text-xs text-gray-400">Stock</span>
+            <p class="{% if product.stock < 5 %}text-red-500{% else %}text-brand-500{% endif %} font-bold">
+                {{ product.stock }}
+            </p>
+        </div>
+    </div>
+</div>
+{% empty %}
+<div class="col-span-full text-center py-10 text-gray-400">
+    No hay productos encontrados.
+</div>
+{% endfor %}

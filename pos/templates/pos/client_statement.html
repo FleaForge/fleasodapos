@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+{% load humanize %}
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estado de Cuenta - {{ client.name }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="//unpkg.com/alpinejs" defer></script>
+    <style>
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+
+            body {
+                background: white;
+            }
+
+            .print-container {
+                box-shadow: none;
+                border: none;
+                padding: 0;
+                max-width: 100%;
+                margin: 0;
+            }
+
+            table {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen p-4 md:p-8">
+
+    <div class="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-xl print-container">
+
+        <!-- Header -->
+        <div class="flex justify-between items-start mb-8 border-b pb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">Estado de Cuenta Detallado</h1>
+                <p class="text-gray-500">Fecha Impresión: {{ now|date:"d/m/Y H:i" }}</p>
+
+                {% if not is_public %}
+                <div class="mt-4 no-print space-x-2">
+                    <!-- Add Payment Button trigger -->
+                    <button onclick="document.getElementById('paymentModal').classList.remove('hidden')"
+                        class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-bold text-sm shadow inline-flex items-center gap-2">
+                        <span>$</span> Registrar Pago
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+            <div class="text-right">
+                <h2 class="text-xl font-bold text-gray-700">{{ client.name }}</h2>
+                <p class="text-gray-500">{{ client.phone }}</p>
+                <div class="mt-2 text-right">
+                    <span class="block text-xs uppercase text-gray-400">Saldo Actual</span>
+                    <span
+                        class="text-3xl font-bold {% if current_debt > 0 %}text-red-500{% else %}text-green-500{% endif %}">
+                        ${{ current_debt|intcomma }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timeline Table -->
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm min-w-[600px]">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                    <tr class="text-gray-500 uppercase tracking-wider">
+                        <th class="py-3 px-2">Fecha</th>
+                        <th class="py-3 px-2">Descripción / Detalle Productos</th>
+                        <th class="py-3 px-2 text-right text-red-500">Débito (+ Compra)</th>
+                        <th class="py-3 px-2 text-right text-green-600">Crédito (- Abono)</th>
+                        <th class="py-3 px-2 text-right font-bold text-gray-700">Saldo</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for event in timeline %}
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="py-3 px-2 whitespace-nowrap align-top text-gray-500">
+                            {{ event.date|date:"d/m/Y H:i" }}
+                        </td>
+
+                        <td class="py-3 px-2 align-top">
+                            <div class="font-bold text-gray-700">{{ event.ref }}</div>
+                            {% if event.type == 'SALE' %}
+                            <div class="mt-1 pl-2 border-l-2 border-brand-200">
+                                {% for item in event.items %}
+                                <div class="text-xs text-gray-500 flex justify-between w-full max-w-xs">
+                                    <span>{{ item.product.name }} (x{{ item.quantity }})</span>
+                                    <span>${{ item.price|intcomma }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </td>
+
+                        <td class="py-3 px-2 text-right align-top">
+                            {% if event.debit > 0 %}
+                            <span class="font-bold text-red-500">${{ event.debit|intcomma }}</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="py-3 px-2 text-right align-top">
+                            {% if event.credit > 0 %}
+                            <span class="font-bold text-green-600">-${{ event.credit|intcomma }}</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="py-3 px-2 text-right font-bold text-gray-700 align-top bg-gray-50">
+                            ${{ event.balance|intcomma }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="py-8 text-center text-gray-400">Sin movimientos registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Footer Signatures -->
+        <div class="mt-16 pt-8 border-t border-gray-200 grid grid-cols-2 gap-16 no-print">
+            <div></div>
+            <div class="text-center pt-8 border-t border-gray-400">
+                <p class="font-bold text-gray-600">Firma Cliente</p>
+                <p class="text-xs text-gray-400 mt-1">Acepto el saldo pendiente mostrado arriba.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Payment Modal (Plain HTML/CSS/JS for stability in this view) -->
+    <div id="paymentModal"
+        class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 no-print">
+        <div class="bg-white p-6 rounded-xl shadow-xl w-full max-w-sm mx-4">
+            <h3 class="text-xl font-bold mb-4 text-green-600">Registrar Pago</h3>
+            <form action="{% url 'add_payment' client.id %}" method="POST">
+                {% csrf_token %}
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-gray-600">Monto</label>
+                        <input type="number" step="0.01" name="amount"
+                            class="w-full p-2 border rounded-lg text-2xl font-bold" required placeholder="0.00">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-600">Nota / Referencia</label>
+                        <textarea name="note" class="w-full p-2 border rounded-lg" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end gap-2">
+                    <button type="button" onclick="document.getElementById('paymentModal').classList.add('hidden')"
+                        class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">cancelar</button>
+                    <button type="submit"
+                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Guardar Pago</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Floating Controls -->
+    <!-- Floating Controls -->
+    {% if not is_public %}
+    <div class="fixed bottom-8 right-8 space-x-2 md:space-x-4 no-print flex items-center z-50">
+        <button onclick="history.back()"
+            class="bg-gray-500 text-white px-4 py-3 md:px-6 rounded-full shadow-lg hover:bg-gray-600 font-bold text-sm md:text-base">
+            Volver
+        </button>
+
+        <!-- WhatsApp Link Button -->
+        <a href="https://wa.me/57{{ client.phone }}?text=Hola *{{ client.name }}*, te comparto tu estado de cuenta.%0A%0ATu saldo actual es: *${{ current_debt|intcomma }}*%0A%0APuedes ver el detalle y descargar tu paz y salvo aquí:%0A{{ request.scheme }}://{{ request.get_host }}{% url 'client_public_statement' client.id %}"
+            target="_blank"
+            class="bg-green-500 text-white px-4 py-3 md:px-6 rounded-full shadow-lg hover:bg-green-600 font-bold flex items-center gap-2 text-sm md:text-base">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                    d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 4.671 7.426 10.999 8.019.558.077 2.059.207 3.321-.19 1.378-.432 2.768-1.651 3.194-2.854.425-1.203.425-2.234.297-2.455-.126-.222-.321-.421-.395-.545z" />
+            </svg>
+            Link
+        </a>
+
+        <!-- PDF Button -->
+        <a href="{% url 'client_statement_pdf' client.id %}" target="_blank"
+            class="bg-red-600 text-white px-4 py-3 md:px-6 rounded-full shadow-lg hover:bg-red-700 font-bold flex items-center gap-2 text-sm md:text-base">
+            📄 PDF
+        </a>
+
+        <button onclick="window.print()"
+            class="bg-blue-600 text-white px-4 py-3 md:px-6 rounded-full shadow-lg hover:bg-blue-700 font-bold hidden md:block">
+            🖨️ Imprimir
+        </button>
+    </div>
+    {% else %}
+    <!-- Simplified controls for public -->
+    <div class="fixed bottom-8 right-8 space-x-4 no-print flex">
+        <button onclick="window.close()"
+            class="bg-gray-500 text-white px-6 py-3 rounded-full shadow-lg hover:bg-gray-600 font-bold">
+            Cerrar Pestaña
+        </button>
+    </div>
+    {% endif %}
+
+    <script>
+        // No redundant scripts
+    </script>
+</body>
+
+</html>
