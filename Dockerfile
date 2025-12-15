@@ -49,7 +49,7 @@ RUN mkdir -p /app/data /app/db
 RUN python manage.py collectstatic --noinput
 
 # Expose port
-EXPOSE 8000
+EXPOSE 7001
 
 # Start script
 # We run migrations and then start gunicorn
