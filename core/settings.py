@@ -129,4 +129,10 @@ USE_THOUSAND_SEPARATOR = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+# Source of static files during development
 STATICFILES_DIRS = [BASE_DIR / "static"]
+# Destination for collectstatic (used by Whitenoise in production)
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Enable WhiteNoise compression and caching
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
