@@ -35,7 +35,7 @@ COPY . /app/
 
 # Build TailwindCSS
 RUN npm install
-RUN npm run build
+RUN npm run build:css
 
 # Create necessary directories and set permissions for SQLite
 # In container, user might be root or appuser. 
