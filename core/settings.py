@@ -63,6 +63,10 @@ LOGOUT_REDIRECT_URL = 'login'
 
 ROOT_URLCONF = 'core.urls'
 
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+csrf_cookie_secure = True
+session_cookie_secure = True
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
