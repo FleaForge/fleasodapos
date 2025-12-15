@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.11-slim-bookworm
+FROM python:3.13.11-slim-bookworm
 
 # Set environment variables
 # PYTHONDONTWRITEBYTECODE: Prevents Python from writing pyc files to disc
