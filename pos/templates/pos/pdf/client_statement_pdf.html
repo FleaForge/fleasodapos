@@ -117,19 +117,35 @@
     </div>
 
     <div class="client-info">
-        <strong>Cliente:</strong> {{ client.name }} <br>
-        <strong>Teléfono:</strong> {{ client.phone }} <br>
-        <strong>Email:</strong> {{ client.email }}
+        <table style="width: 100%; border: none; margin-top: 0;">
+            <tr>
+                <td style="border: none; padding: 0;">
+                    <strong>Cliente:</strong> {{ client.name }} <br>
+                    <strong>Teléfono:</strong> {{ client.phone }} <br>
+                    <strong>Email:</strong> {{ client.email }}
+                </td>
+                <td style="border: none; padding: 0; text-align: right; vertical-align: top;">
+                    <div style="background-color: #f9f9f9; padding: 10px; border-radius: 5px; display: inline-block;">
+                        <span style="font-size: 10px; color: #666; text-transform: uppercase;">Deuda Actual</span><br>
+                        <span
+                            style="font-size: 16px; font-weight: bold; color: {% if current_debt > 0 %}#d32f2f{% else %}#388e3c{% endif %};">
+                            ${{ current_debt|intcomma }}
+                        </span>
+                    </div>
+                </td>
+            </tr>
+        </table>
     </div>
 
     <table>
         <thead>
             <tr>
                 <th width="15%">Fecha</th>
-                <th width="45%">Concepto</th>
-                <th width="15%" class="text-right">Débito</th>
-                <th width="15%" class="text-right">Crédito</th>
-                <th width="10%" class="text-right">Saldo</th>
+                <th width="35%">Concepto</th>
+                <th width="15%">Comentario</th>
+                <th width="12%" class="text-right">Débito</th>
+                <th width="12%" class="text-right">Crédito</th>
+                <th width="11%" class="text-right">Saldo</th>
             </tr>
         </thead>
         <tbody>
@@ -146,6 +162,9 @@
                     </div>
                     {% endif %}
                 </td>
+                <td style="font-style: italic; color: #555; font-size: 10px;">
+                    {{ event.object.note|default_if_none:""|linebreaksbr }}
+                </td>
                 <td class="text-right debit">
                     {% if event.debit > 0 %}${{ event.debit|intcomma }}{% endif %}
                 </td>
@@ -156,14 +175,14 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="5" class="text-center">Sin movimientos registrados.</td>
+                <td colspan="6" class="text-center">Sin movimientos registrados en este ciclo.</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 
     <div class="total-box">
-        Gran Total / Deuda Actual: ${{ current_debt|intcomma }}
+        Deuda Actual: ${{ current_debt|intcomma }}
     </div>
 
     <div id="footerContent" class="footer">

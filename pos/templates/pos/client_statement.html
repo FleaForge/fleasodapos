@@ -72,7 +72,8 @@
                 <thead class="bg-gray-50 border-b border-gray-200">
                     <tr class="text-gray-500 uppercase tracking-wider">
                         <th class="py-3 px-2">Fecha</th>
-                        <th class="py-3 px-2">Descripción / Detalle Productos</th>
+                        <th class="py-3 px-2">Detalle de Venta</th>
+                        <th class="py-3 px-2 w-1/5">Comentario</th>
                         <th class="py-3 px-2 text-right text-red-500">Débito (+ Compra)</th>
                         <th class="py-3 px-2 text-right text-green-600">Crédito (- Abono)</th>
                         <th class="py-3 px-2 text-right font-bold text-gray-700">Saldo</th>
@@ -80,38 +81,86 @@
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     {% for event in timeline %}
-                    <tr class="hover:bg-gray-50 transition">
+
+                    {# Visual Restart if Balance is 0 #}
+                    {% if event.balance == 0 %}
+                    <tr class="bg-brand-50 border-b-2 border-brand-200">
+                        <td colspan="6"
+                            class="py-2 text-center text-brand-600 font-bold text-xs uppercase tracking-widest">
+                            ✨ Cuenta Saldada / Reinicio de Ciclo — Historial Previo Abajo ✨
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    <tr class="hover:bg-gray-50 transition {% if event.balance == 0 %}bg-green-50{% endif %}">
                         <td class="py-3 px-2 whitespace-nowrap align-top text-gray-500">
                             {{ event.date|date:"d/m/Y H:i" }}
                         </td>
 
-                        <td class="py-3 px-2 align-top">
-                            <div class="font-bold text-gray-700">{{ event.ref }}</div>
+                        <td class="py-3 px-2 align-top" x-data="{ expanded: false }">
+                            <div class="flex items-center gap-2 mb-1">
+                                <div class="font-bold text-gray-700">{{ event.ref }}</div>
+                                {% if event.type == 'SALE' %}
+                                <button @click="expanded = !expanded"
+                                    class="text-xs bg-brand-50 text-brand-600 hover:bg-brand-100 px-2 py-1 rounded border border-brand-200 transition flex items-center gap-1 no-print">
+                                    <span x-text="expanded ? 'Ocultar' : 'Ver items ({{ event.items|length }})'"></span>
+                                    <span x-text="expanded ? '▲' : '▼'"></span>
+                                </button>
+                                {% endif %}
+                            </div>
+
                             {% if event.type == 'SALE' %}
-                            <div class="mt-1 pl-2 border-l-2 border-brand-200">
-                                {% for item in event.items %}
-                                <div class="text-xs text-gray-500 flex justify-between w-full max-w-xs">
-                                    <span>{{ item.product.name }} (x{{ item.quantity }})</span>
-                                    <span>${{ item.price|intcomma }}</span>
-                                </div>
-                                {% endfor %}
+                            <div x-show="expanded" style="display: none;"
+                                class="overflow-hidden rounded border border-gray-100 mt-2 transition-all duration-300">
+                                <table class="w-full text-xs">
+                                    <thead class="bg-gray-50 text-gray-500 font-medium">
+                                        <tr>
+                                            <th class="px-2 py-1 text-center w-10 border-r border-gray-100">Cant.</th>
+                                            <th class="px-2 py-1 text-left">Descripción</th>
+                                            <th class="px-2 py-1 text-right w-16">Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-50">
+                                        {% for item in event.items %}
+                                        <tr>
+                                            <td
+                                                class="px-2 py-1 text-center font-bold text-brand-600 bg-brand-50 border-r border-gray-100">
+                                                {{ item.quantity }}</td>
+                                            <td class="px-2 py-1 text-gray-700">{{ item.product.name }}</td>
+                                            <td class="px-2 py-1 text-right text-gray-400">${{ item.price|intcomma }}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
                             </div>
                             {% endif %}
                         </td>
 
+                        <td class="py-3 px-2 align-top text-xs text-gray-600 italic">
+                            {{ event.object.note|default:""|linebreaksbr }}
+                        </td>
+
                         <td class="py-3 px-2 text-right align-top">
                             {% if event.debit > 0 %}
-                            <span class="font-bold text-red-500">${{ event.debit|intcomma }}</span>
+                            <span
+                                class="font-bold text-red-600 bg-red-50 px-2 py-1 rounded-lg border border-red-100 block w-fit ml-auto">
+                                ${{ event.debit|intcomma }}
+                            </span>
                             {% endif %}
                         </td>
 
                         <td class="py-3 px-2 text-right align-top">
                             {% if event.credit > 0 %}
-                            <span class="font-bold text-green-600">-${{ event.credit|intcomma }}</span>
+                            <span
+                                class="font-bold text-green-700 bg-green-50 px-2 py-1 rounded-lg border border-green-100 block w-fit ml-auto">
+                                -${{ event.credit|intcomma }}
+                            </span>
                             {% endif %}
                         </td>
 
-                        <td class="py-3 px-2 text-right font-bold text-gray-700 align-top bg-gray-50">
+                        <td
+                            class="py-3 px-2 text-right font-bold text-gray-700 align-top {% if event.balance == 0 %}text-green-600{% endif %}">
                             ${{ event.balance|intcomma }}
                         </td>
                     </tr>
@@ -184,7 +233,7 @@
         </a>
 
         <!-- PDF Button -->
-        <a href="{% url 'client_statement_pdf' client.id %}" target="_blank"
+        <a href="{% url 'client_statement_pdf' client.id %}"
             class="bg-red-600 text-white px-4 py-3 md:px-6 rounded-full shadow-lg hover:bg-red-700 font-bold flex items-center gap-2 text-sm md:text-base">
             📄 PDF
         </a>

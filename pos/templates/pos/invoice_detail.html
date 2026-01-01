@@ -67,6 +67,12 @@
                     {% if sale.payment_method == 'CASH' %}Contado{% else %}Crédito{% endif %}
                 </span>
             </div>
+            {% if sale.note %}
+            <div class="mt-2 p-2 bg-gray-50 rounded border border-gray-100">
+                <span class="block text-gray-400 text-xs uppercase tracking-wider">Comentario:</span>
+                <p class="text-gray-800 italic">{{ sale.note|linebreaksbr }}</p>
+            </div>
+            {% endif %}
         </div>
 
         <table class="w-full text-sm mb-6">
@@ -105,6 +111,12 @@
         <div class="mt-8 flex justify-center gap-4 no-print">
             <button onclick="window.close()"
                 class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Cerrar</button>
+
+            <a href="{% url 'edit_sale' sale.id %}"
+                class="px-4 py-2 bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 font-medium flex items-center gap-2">
+                <span>✏️</span> Editar
+            </a>
+
             <button onclick="window.print()"
                 class="px-4 py-2 bg-brand-500 text-white font-bold rounded hover:bg-brand-400">Imprimir</button>
         </div>

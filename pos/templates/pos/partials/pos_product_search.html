@@ -5,14 +5,14 @@
 
     <div class="flex justify-between items-start">
         <div class="truncate pr-2 cursor-pointer flex-1" hx-post="{% url 'add_to_cart' %}"
-            hx-vals='{"product_id": "{{ product.id }}", "quantity": 1 }' hx-target="#cart-items">
+            hx-vals='{"product_id": "{{ product.id }}", "quantity": 1 }' hx-target="#cart-items, #cart-items-desktop">
             <div class="text-sm font-bold text-brand-500 truncate">{{ product.name }}</div>
             <div class="text-xs text-gray-400">{{ product.barcode }}</div>
         </div>
 
         <!-- Manual Quantity Input Form -->
-        <form hx-post="{% url 'add_to_cart' %}" hx-target="#cart-items" class="flex flex-col items-end z-10"
-            onclick="event.stopPropagation()">
+        <form hx-post="{% url 'add_to_cart' %}" hx-target="#cart-items, #cart-items-desktop"
+            class="flex flex-col items-end z-10" onclick="event.stopPropagation()">
             <input type="hidden" name="product_id" value="{{ product.id }}">
             <input type="number" min="1" value="1" name="quantity"
                 class="w-12 text-center text-xs border border-brand-200 rounded p-1 mb-1">
@@ -23,7 +23,7 @@
     </div>
 
     <div class="flex justify-between items-end mt-2 cursor-pointer" hx-post="{% url 'add_to_cart' %}"
-        hx-vals='{"product_id": "{{ product.id }}", "quantity": 1 }' hx-target="#cart-items">
+        hx-vals='{"product_id": "{{ product.id }}", "quantity": 1 }' hx-target="#cart-items, #cart-items-desktop">
         <span class="font-bold text-brand-400 text-lg">${{ product.price|intcomma }}</span>
         <!-- Formatted price -->
     </div>

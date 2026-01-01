@@ -24,17 +24,23 @@ def get_cart_data(session):
 
 @login_required
 def dashboard(request):
-    total_sales = Sale.objects.aggregate(Sum('total'))['total__sum'] or 0
-    today_sales = Sale.objects.filter(date__date=timezone.now().date()).aggregate(Sum('total'))['total__sum'] or 0
+    now = timezone.now()
+    # Monthly sales (current month)
+    monthly_sales = Sale.objects.filter(
+        date__year=now.year,
+        date__month=now.month
+    ).aggregate(Sum('total'))['total__sum'] or 0
     
-    # Calculate detailed debt: Sum of (Credit Sales Total) - Sum of (Payments on those sales)
-    # Depending on how rigorous the math needs to be.
-    # For now, simple approach:
-    unpaid_sales = Sale.objects.filter(payment_method='CREDIT', is_paid=False)
-    debt_pending = sum(s.total for s in unpaid_sales)
+    today_sales = Sale.objects.filter(date__date=now.date()).aggregate(Sum('total'))['total__sum'] or 0
+    
+    # Calculate detailed debt: Sum of (Credit Sales Total) - Sum of (All Payments)
+    # This ensures the portfolio decreases as clients make payments
+    total_credit_sales = Sale.objects.filter(payment_method='CREDIT').aggregate(Sum('total'))['total__sum'] or 0
+    total_payments = Payment.objects.aggregate(Sum('amount'))['amount__sum'] or 0
+    debt_pending = total_credit_sales - total_payments
     
     context = {
-        'total_sales': total_sales,
+        'total_sales': monthly_sales,
         'today_sales': today_sales,
         'debt_pending': debt_pending,
     }
@@ -284,6 +290,8 @@ def checkout(request):
         created_at_str = request.POST.get('created_at')
         sale_date = timezone.now()
         
+        note = request.POST.get('note', '')
+
         if created_at_str:
             try:
                 # datetime-local format is YYYY-MM-DDTHH:MM
@@ -299,7 +307,8 @@ def checkout(request):
             payment_method=payment_method,
             total=total,
             is_paid=(payment_method == 'CASH'),
-            date=sale_date
+            date=sale_date,
+            note=note
         )
         
         for item in cart.values():
@@ -526,8 +535,9 @@ def client_statement_pdf(request, client_id):
     timeline.sort(key=lambda x: x['date'])
     
     running_balance = 0
-    reversed_timeline = []
+    calculated_timeline = []
     
+    # 1. Calculate running balance forward
     for event in timeline:
         if event['type'] == 'SALE':
             running_balance += float(event['amount'])
@@ -539,9 +549,41 @@ def client_statement_pdf(request, client_id):
             event['credit'] = event['amount']
         
         event['balance'] = running_balance
-        reversed_timeline.append(event)
+        calculated_timeline.append(event)
+
+    # 2. Filter logic: Find the last time balance was close to 0 (allow for small float diffs if needed, but 0 is safer for now)
+    # If the user has a current debt, we want the history starting AFTER the last 0 balance.
+    # If the user is currently 0, we might want to show the last cycle? Or just empty. 
+    # Usually "what they owe" implies current cycle.
+    
+    cutoff_index = -1
+    for i, event in enumerate(calculated_timeline):
+        # We check if balance is 0. If so, the next item is the start of new cycle.
+        if abs(event['balance']) < 0.01:
+            cutoff_index = i
+            
+    # Slice the timeline to keep only events occurring AFTER the cutoff
+    if cutoff_index != -1 and cutoff_index < len(calculated_timeline) - 1:
+        # Check if we are at the very end (balance is 0 currently)
+        # If current debt is 0, we can show just the "Settled" state or the last cycle? 
+        # User said "solo salir lo que debe y lo que abono". 
+        # If debt is 0, maybe showing nothing is weird. Let's assume we show active items.
         
-    reversed_timeline.reverse()
+        if current_debt > 0.01:
+             calculated_timeline = calculated_timeline[cutoff_index+1:]
+        else:
+             # If completely paid off, maybe show the last cycle? 
+             # Or as per user "reset", it might mean show nothing or just header. 
+             # Let's keep the logic simple: Show Active Cycle.
+             # If balance is 0, list might be empty.
+             calculated_timeline = [] 
+
+    # Reverse for display (actives usually show newest first, but for PDF statement printed sometimes chronological is better? 
+    # The existing code reversed it. Let's keep it reversed or check user intent.
+    # User said "reset... only what he owes".
+    # Existing 'reversed_timeline' implies newest first.
+    
+    reversed_timeline = list(reversed(calculated_timeline))
 
     context = {
         'client': client,
@@ -579,3 +621,94 @@ def service_worker(request):
         return HttpResponse(content, content_type='application/javascript')
     except FileNotFoundError:
         return HttpResponse("console.error('Service Worker NOT FOUND');", content_type='application/javascript')
+
+def manifest(request):
+    from django.conf import settings
+    import os
+    
+    manifest_path = os.path.join(settings.BASE_DIR, 'static', 'manifest.json')
+    
+    try:
+        with open(manifest_path, 'r') as f:
+            content = f.read()
+        return HttpResponse(content, content_type='application/json')
+    except FileNotFoundError:
+        return HttpResponse("{}", content_type='application/json')
+
+@login_required
+def edit_product(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    if request.method == 'POST':
+        product.name = request.POST.get('name')
+        product.barcode = request.POST.get('barcode')
+        product.price = request.POST.get('price')
+        
+        stock_val = request.POST.get('stock')
+        if stock_val:
+             product.stock = stock_val
+             
+        product.save()
+        messages.success(request, 'Producto actualizado correctamente.')
+        return redirect('inventory')
+        
+    return render(request, 'pos/edit_product.html', {'product': product})
+
+@login_required
+def add_stock(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    if request.method == 'POST':
+        try:
+            quantity = int(request.POST.get('quantity'))
+            if quantity > 0:
+                product.stock += quantity
+                product.save()
+                messages.success(request, f'Se agregaron {quantity} unidades a {product.name}')
+            else:
+                 messages.error(request, 'La cantidad debe ser mayor a 0')
+        except ValueError:
+            messages.error(request, 'Cantidad inválida')
+            
+    return redirect('inventory')
+
+@login_required
+def edit_client(request, client_id):
+    client = get_object_or_404(Client, id=client_id)
+    if request.method == 'POST':
+        client.name = request.POST.get('name')
+        client.phone = request.POST.get('phone')
+        client.email = request.POST.get('email')
+        client.address = request.POST.get('address')
+        client.save()
+        messages.success(request, 'Cliente actualizado correctamente.')
+        return redirect('clients')
+    return render(request, 'pos/edit_client.html', {'client': client})
+
+@login_required
+def edit_sale(request, sale_id):
+    sale = get_object_or_404(Sale, id=sale_id)
+    if request.method == 'POST':
+        # Edit Client
+        client_id = request.POST.get('client_id')
+        if client_id:
+            client = get_object_or_404(Client, id=client_id)
+            sale.client = client
+            
+        # Edit Date
+        date_str = request.POST.get('date')
+        if date_str:
+            try:
+                # Expecting YYYY-MM-DDTHH:MM
+                dt = timezone.datetime.strptime(date_str, '%Y-%m-%dT%H:%M')
+                sale.date = timezone.make_aware(dt)
+            except (ValueError, TypeError):
+                 messages.error(request, 'Formato de fecha inválido')
+        
+        sale.note = request.POST.get('note', '')
+        sale.save()
+        messages.success(request, 'Factura actualizada correctamente.')
+        return redirect('invoice_detail', sale_id=sale.id)
+    
+    clients = Client.objects.all()
+    # Format date for datetime-local input
+    local_date = timezone.localtime(sale.date).strftime('%Y-%m-%dT%H:%M')
+    return render(request, 'pos/edit_sale.html', {'sale': sale, 'clients': clients, 'formatted_date': local_date})

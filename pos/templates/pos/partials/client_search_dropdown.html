@@ -1,19 +1,23 @@
 {% if clients %}
-<div class="absolute z-50 w-full bg-white border border-brand-200 rounded-lg shadow-xl max-h-48 overflow-y-auto mt-1">
+<div class="absolute z-50 w-full bg-white border border-brand-300 rounded-lg shadow-2xl max-h-60 overflow-y-auto mt-1">
     {% for client in clients %}
-    <div class="p-2 hover:bg-brand-100 cursor-pointer border-b border-gray-50 last:border-0" @click="
+    <div class="p-3 hover:bg-brand-50 cursor-pointer border-b border-gray-100 last:border-0 transition-colors" @click="
             clientId = '{{ client.id }}'; 
             clientName = '{{ client.name }}'; 
             searchOpen = false;
+            $el.closest('form')?.querySelector('input[name=client_search_display]')?.blur();
          ">
-        <div class="font-bold text-gray-700">{{ client.name }}</div>
-        <div class="text-xs text-gray-500">{{ client.phone }}</div>
+        <div class="font-bold text-gray-800 text-sm">{{ client.name }}</div>
+        <div class="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+            <span>📱</span>
+            <span>{{ client.phone }}</span>
+        </div>
     </div>
     {% endfor %}
 </div>
 {% elif request.GET.search %}
 <div
-    class="absolute z-50 w-full bg-white border border-brand-200 rounded-lg shadow-xl mt-1 p-2 text-gray-400 text-sm italic">
-    No se encontraron resultados
+    class="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-xl mt-1 p-3 text-gray-400 text-sm italic">
+    ❌ No se encontraron clientes
 </div>
 {% endif %}

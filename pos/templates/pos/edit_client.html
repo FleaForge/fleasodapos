@@ -1,0 +1,46 @@
+{% extends 'pos/base.html' %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto bg-white p-8 rounded-xl shadow-sm border border-brand-100">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">Editar Cliente</h2>
+        <a href="{% url 'clients' %}" class="text-gray-500 hover:text-gray-700">Cancelar</a>
+    </div>
+
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+            <input type="text" name="name" value="{{ client.name }}" required
+                class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                <input type="text" name="phone" value="{{ client.phone }}"
+                    class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input type="email" name="email" value="{{ client.email }}"
+                    class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+            <textarea name="address" rows="3"
+                class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">{{ client.address }}</textarea>
+        </div>
+
+        <div class="pt-4">
+            <button type="submit"
+                class="w-full py-3 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-md">
+                Guardar Cambios
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends 'pos/base.html' %}
+
+{% block content %}
+<div class="max-w-xl mx-auto bg-white p-8 rounded-xl shadow-sm border border-brand-100">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">Editar Factura #{{ sale.id }}</h2>
+        <a href="{% url 'invoice_detail' sale.id %}" class="text-gray-500 hover:text-gray-700">Cancelar</a>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de Venta</label>
+            <input type="datetime-local" name="date" value="{{ formatted_date }}" required
+                class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">
+            <p class="text-xs text-gray-500 mt-1">Formato: DD/MM/AAAA HH:MM (Zona Horaria Colombia)</p>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+            <select name="client_id"
+                class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">
+                {% for client in clients %}
+                <option value="{{ client.id }}" {% if client.id == sale.client.id %}selected{% endif %}>
+                    {{ client.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Comentario / Notas</label>
+            <textarea name="note" rows="3"
+                class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">{{ sale.note|default:'' }}</textarea>
+        </div>
+
+        <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+            <p class="text-sm text-yellow-800 font-medium">⚠️ Advertencia</p>
+            <p class="text-xs text-yellow-700 mt-1">
+                Cambiar la fecha o el cliente puede afectar los reportes diarios y los estados de cuenta.
+                Asegúrate de que la información sea correcta.
+            </p>
+        </div>
+
+        <div class="pt-4">
+            <button type="submit"
+                class="w-full py-3 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-md">
+                Actualizar Factura
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -44,6 +44,7 @@ class Sale(models.Model):
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHODS, default='CASH')
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     is_paid = models.BooleanField(default=True) # Cash is paid immediately
+    note = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return f"Factura #{self.id} - {self.client.name}"

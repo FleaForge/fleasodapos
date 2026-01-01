@@ -15,7 +15,7 @@
         <button
             class="w-6 h-6 flex items-center justify-center bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-bold text-xs"
             hx-post="{% url 'update_cart_item' %}" hx-vals='{"product_id": "{{ item.id }}", "action": "decrement"}'
-            hx-target="#cart-items">
+            hx-target="#cart-items, #cart-items-desktop">
             -
         </button>
 
@@ -24,7 +24,7 @@
         <button
             class="w-6 h-6 flex items-center justify-center bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-bold text-xs"
             hx-post="{% url 'update_cart_item' %}" hx-vals='{"product_id": "{{ item.id }}", "action": "increment"}'
-            hx-target="#cart-items">
+            hx-target="#cart-items, #cart-items-desktop">
             +
         </button>
     </div>
@@ -32,7 +32,7 @@
     <div class="text-right flex flex-col items-end">
         <div class="font-bold text-brand-400 text-sm">${{ item.subtotal|intcomma }}</div>
         <button class="text-xs text-red-400 hover:text-red-600 mt-1" hx-post="{% url 'update_cart_item' %}"
-            hx-vals='{"product_id": "{{ item.id }}", "action": "remove"}' hx-target="#cart-items">
+            hx-vals='{"product_id": "{{ item.id }}", "action": "remove"}' hx-target="#cart-items, #cart-items-desktop">
             Eliminar
         </button>
     </div>
@@ -51,3 +51,7 @@
     Carrito vacío
 </div>
 {% endif %}
+
+<div id="mobile-cart-total" hx-swap-oob="true" class="bg-white text-brand-400 px-4 py-2 rounded-xl font-bold">
+    ${{ cart_total|default:"0"|intcomma }}
+</div>
