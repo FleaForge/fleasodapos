@@ -53,15 +53,18 @@
 
         th {
             background-color: #f3f3f3;
-            padding: 5px;
+            padding: 6px;
             text-align: left;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 2px solid #333;
             font-weight: bold;
+            font-size: 10px;
+            text-transform: uppercase;
         }
 
         td {
-            padding: 5px;
+            padding: 6px;
             border-bottom: 1px solid #eee;
+            vertical-align: top;
         }
 
         .text-right {
@@ -72,15 +75,33 @@
             text-align: center;
         }
 
-        .debit {
+        .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: bold;
+            margin-right: 5px;
+        }
+
+        .badge-compra {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+
+        .badge-abono {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .amount-compra {
             color: #d32f2f;
+            font-weight: bold;
+            font-size: 12px;
         }
 
-        .credit {
+        .amount-abono {
             color: #388e3c;
-        }
-
-        .balance {
             font-weight: bold;
             font-size: 12px;
         }
@@ -99,12 +120,23 @@
             text-align: center;
         }
 
-        /* Items detail inside row */
         .items-detail {
             font-size: 9px;
             color: #666;
             padding-left: 10px;
-            margin-top: 2px;
+            margin-top: 3px;
+        }
+
+        .reset-row {
+            background-color: #e8f5e9;
+            border-top: 2px solid #4caf50;
+            border-bottom: 2px solid #4caf50;
+            font-weight: bold;
+            color: #2e7d32;
+            text-align: center;
+            padding: 8px;
+            font-size: 10px;
+            text-transform: uppercase;
         }
     </style>
 </head>
@@ -112,7 +144,7 @@
 <body>
     <div class="header">
         <h1>FleasoDaPos Papelería</h1>
-        <h2>Estado de Cuenta Detallado</h2>
+        <h2>Estado de Cuenta</h2>
         <p>Generado el: {{ now|date:"d/m/Y H:i" }}</p>
     </div>
 
@@ -126,7 +158,7 @@
                 </td>
                 <td style="border: none; padding: 0; text-align: right; vertical-align: top;">
                     <div style="background-color: #f9f9f9; padding: 10px; border-radius: 5px; display: inline-block;">
-                        <span style="font-size: 10px; color: #666; text-transform: uppercase;">Deuda Actual</span><br>
+                        <span style="font-size: 10px; color: #666; text-transform: uppercase;">Saldo Actual</span><br>
                         <span
                             style="font-size: 16px; font-weight: bold; color: {% if current_debt > 0 %}#d32f2f{% else %}#388e3c{% endif %};">
                             ${{ current_debt|intcomma }}
@@ -140,20 +172,38 @@
     <table>
         <thead>
             <tr>
-                <th width="15%">Fecha</th>
-                <th width="35%">Concepto</th>
-                <th width="15%">Comentario</th>
-                <th width="12%" class="text-right">Débito</th>
-                <th width="12%" class="text-right">Crédito</th>
-                <th width="11%" class="text-right">Saldo</th>
+                <th width="12%">Fecha</th>
+                <th width="50%">Movimiento</th>
+                <th width="18%">Comentario</th>
+                <th width="20%" class="text-right">Monto</th>
             </tr>
         </thead>
         <tbody>
             {% for event in timeline %}
+            
+            {# Visual Restart if Balance is 0 #}
+            {% if event.balance == 0 %}
             <tr>
-                <td>{{ event.date|date:"d/m/Y" }}</td>
+                <td colspan="4" class="reset-row">
+                    ✓ Cuenta Saldada — Historial Previo Abajo
+                </td>
+            </tr>
+            {% endif %}
+
+            <tr>
+                <td style="font-size: 10px; color: #666;">
+                    {{ event.date|date:"d/m/Y" }}<br>
+                    <span style="color: #999;">{{ event.date|date:"H:i" }}</span>
+                </td>
                 <td>
-                    <b>{{ event.ref }}</b>
+                    <div>
+                        {% if event.type == 'SALE' %}
+                        <span class="badge badge-compra">COMPRA</span>
+                        {% else %}
+                        <span class="badge badge-abono">ABONO</span>
+                        {% endif %}
+                        <strong>{{ event.ref }}</strong>
+                    </div>
                     {% if event.type == 'SALE' %}
                     <div class="items-detail">
                         {% for item in event.items %}
@@ -165,24 +215,24 @@
                 <td style="font-style: italic; color: #555; font-size: 10px;">
                     {{ event.object.note|default_if_none:""|linebreaksbr }}
                 </td>
-                <td class="text-right debit">
-                    {% if event.debit > 0 %}${{ event.debit|intcomma }}{% endif %}
+                <td class="text-right">
+                    {% if event.type == 'SALE' %}
+                    <span class="amount-compra">+${{ event.amount|intcomma }}</span>
+                    {% else %}
+                    <span class="amount-abono">-${{ event.amount|intcomma }}</span>
+                    {% endif %}
                 </td>
-                <td class="text-right credit">
-                    {% if event.credit > 0 %}${{ event.credit|intcomma }}{% endif %}
-                </td>
-                <td class="text-right balance">${{ event.balance|intcomma }}</td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="6" class="text-center">Sin movimientos registrados en este ciclo.</td>
+                <td colspan="4" class="text-center">Sin movimientos registrados.</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 
     <div class="total-box">
-        Deuda Actual: ${{ current_debt|intcomma }}
+        Saldo Actual: <strong style="color: {% if current_debt > 0 %}#d32f2f{% else %}#388e3c{% endif %};">${{ current_debt|intcomma }}</strong>
     </div>
 
     <div id="footerContent" class="footer">

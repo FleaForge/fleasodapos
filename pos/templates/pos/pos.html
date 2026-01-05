@@ -1,209 +1,326 @@
-{% extends 'pos/base.html' %}
-{% load humanize %}
-
-{% block content %}
-<div class="h-[calc(100vh-80px)] flex flex-col md:flex-row gap-4 relative"
-    x-data="{ cartOpen: false, searchOpen: false, clientId: '', clientName: '' }">
-
-    <!-- Left Side: Product Search & Grid -->
-    <div class="flex-1 flex flex-col overflow-hidden">
-        <!-- Search Bar -->
-        <div class="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-brand-200 mb-3 md:mb-4 shrink-0">
-            <div class="relative">
-                <span class="absolute left-3 top-3 text-gray-400 text-lg">🔍</span>
-                <input type="text" name="search" placeholder="Buscar artículo..."
-                    class="w-full p-3 pl-10 bg-brand-50 rounded-lg border border-brand-100 focus:ring-2 focus:ring-brand-500"
-                    hx-get="{% url 'search_products' %}" hx-trigger="keyup changed delay:200ms, search"
-                    hx-target="#pos-results" autofocus autocomplete="off">
-            </div>
-        </div>
-
-        <!-- Scrollable Grid -->
-        <div id="pos-results"
-            class="flex-1 overflow-y-auto grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-3 content-start pb-24 md:pb-0">
-            <!-- Results load here -->
-            <div class="col-span-full text-center text-gray-400 mt-20 flex flex-col items-center">
-                <span class="text-4xl mb-2">🔍</span>
-                <p class="text-sm">Busca productos para agregar al carrito</p>
-            </div>
-        </div>
+{% extends 'pos/base.html' %} {% load humanize %} {% block content %}
+<div
+  class="h-[calc(100vh-80px)] flex flex-col md:flex-row gap-4 relative"
+  x-data="{ cartOpen: false, clientId: '', clientName: '' }"
+>
+  <!-- Left Side: Product Search & Grid -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+    <!-- Search Bar -->
+    <div
+      class="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-brand-200 mb-3 md:mb-4 shrink-0"
+    >
+      <div class="relative">
+        <span class="absolute left-3 top-3 text-gray-400 text-lg">🔍</span>
+        <input
+          type="text"
+          name="search"
+          placeholder="Buscar artículo..."
+          class="w-full p-3 pl-10 bg-brand-50 rounded-lg border border-brand-100 focus:ring-2 focus:ring-brand-500"
+          hx-get="{% url 'search_products' %}"
+          hx-trigger="keyup changed delay:200ms, search"
+          hx-target="#pos-results"
+          autofocus
+          autocomplete="off"
+        />
+      </div>
     </div>
 
-    <!-- Mobile: Floating Cart Button -->
-    <button @click="cartOpen = true"
-        class="md:hidden fixed bottom-20 left-4 right-4 bg-brand-400 text-white shadow-2xl rounded-2xl p-4 flex justify-between items-center font-bold z-40 active:scale-95 transition hover:bg-brand-500"
-        style="margin-bottom: env(safe-area-inset-bottom, 0px);">
-        <span class="flex items-center gap-2">
-            <span class="text-xl">🛒</span>
-            <span>Carrito</span>
-        </span>
-        <span id="mobile-cart-total" class="bg-white text-brand-400 px-4 py-2 rounded-xl font-bold">
-            ${{ cart_total|default:"0"|intcomma }}
-        </span>
-    </button>
+    <!-- Scrollable Grid -->
+    <div
+      id="pos-results"
+      class="flex-1 overflow-y-auto grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-3 content-start pb-24 md:pb-0"
+    >
+      <!-- Results load here -->
+      <div
+        class="col-span-full text-center text-gray-400 mt-20 flex flex-col items-center"
+      >
+        <span class="text-4xl mb-2">🔍</span>
+        <p class="text-sm">Busca productos para agregar al carrito</p>
+      </div>
+    </div>
+  </div>
 
-    <!-- Mobile: Bottom Sheet Cart -->
-    <div x-show="cartOpen" x-transition.opacity @click="cartOpen = false"
-        class="md:hidden fixed inset-0 bg-black/50 z-50" style="display: none;">
+  <!-- Mobile: Floating Cart Button -->
+  <button
+    @click="cartOpen = true"
+    class="md:hidden fixed bottom-20 left-4 right-4 bg-brand-400 text-white shadow-2xl rounded-2xl p-4 flex justify-between items-center font-bold z-40 active:scale-95 transition hover:bg-brand-500"
+    style="margin-bottom: env(safe-area-inset-bottom, 0px)"
+  >
+    <span class="flex items-center gap-2">
+      <span class="text-xl">🛒</span>
+      <span>Carrito</span>
+    </span>
+    <span
+      id="mobile-cart-total"
+      class="bg-white text-brand-400 px-4 py-2 rounded-xl font-bold"
+    >
+      ${{ cart_total|default:"0"|intcomma }}
+    </span>
+  </button>
 
-        <div @click.stop x-show="cartOpen" x-transition:enter="transition ease-out duration-300"
-            x-transition:enter-start="translate-y-full" x-transition:enter-end="translate-y-0"
-            x-transition:leave="transition ease-in duration-200" x-transition:leave-start="translate-y-0"
-            x-transition:leave-end="translate-y-full"
-            class="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl max-h-[85vh] flex flex-col">
+  <!-- Mobile: Bottom Sheet Cart -->
+  <div
+    x-show="cartOpen"
+    x-transition.opacity
+    @click="cartOpen = false"
+    class="md:hidden fixed inset-0 bg-black/50 z-50"
+    style="display: none"
+  >
+    <div
+      @click.stop
+      x-show="cartOpen"
+      x-transition:enter="transition ease-out duration-300"
+      x-transition:enter-start="translate-y-full"
+      x-transition:enter-end="translate-y-0"
+      x-transition:leave="transition ease-in duration-200"
+      x-transition:leave-start="translate-y-0"
+      x-transition:leave-end="translate-y-full"
+      class="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl max-h-[85vh] flex flex-col"
+    >
+      <!-- Handle Bar -->
+      <div class="flex justify-center pt-3 pb-2">
+        <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
+      </div>
 
-            <!-- Handle Bar -->
-            <div class="flex justify-center pt-3 pb-2">
-                <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
-            </div>
+      <!-- Cart Header -->
+      <div
+        class="px-4 pb-3 border-b border-gray-200 flex justify-between items-center shrink-0"
+      >
+        <h2 class="font-bold text-lg text-gray-800">🛒 Carrito</h2>
+        <div class="flex gap-2">
+          <button
+            class="text-xs bg-red-100 text-red-600 hover:bg-red-200 px-3 py-1.5 rounded-lg font-medium transition"
+            hx-post="{% url 'clear_cart' %}"
+            hx-target="#cart-items"
+          >
+            Limpiar
+          </button>
+          <button
+            @click="cartOpen = false"
+            class="text-gray-400 hover:text-gray-600 p-1"
+          >
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              ></path>
+            </svg>
+          </button>
+        </div>
+      </div>
 
-            <!-- Cart Header -->
-            <div class="px-4 pb-3 border-b border-gray-200 flex justify-between items-center shrink-0">
-                <h2 class="font-bold text-lg text-gray-800">🛒 Carrito</h2>
-                <div class="flex gap-2">
-                    <button
-                        class="text-xs bg-red-100 text-red-600 hover:bg-red-200 px-3 py-1.5 rounded-lg font-medium transition"
-                        hx-post="{% url 'clear_cart' %}" hx-target="#cart-items">
-                        Limpiar
-                    </button>
-                    <button @click="cartOpen = false" class="text-gray-400 hover:text-gray-600 p-1">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                    </button>
-                </div>
-            </div>
+      <!-- Cart Items -->
+      <div
+        id="cart-items"
+        class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50 min-h-0"
+      >
+        {% include 'pos/partials/cart_items.html' with cart=request.session.cart %}
+      </div>
 
-            <!-- Cart Items -->
-            <div id="cart-items" class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50 min-h-0">
-                {% include 'pos/partials/cart_items.html' with cart=request.session.cart %}
-            </div>
+      <!-- Checkout Form -->
+      <div
+        class="p-4 bg-white border-t border-gray-200 shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.1)] max-h-[50vh] overflow-y-auto"
+      >
+        <form action="{% url 'checkout' %}" method="POST" class="space-y-3">
+          {% csrf_token %}
 
-            <!-- Checkout Form -->
+          <!-- Client -->
+          <div class="relative" x-data="{ searchOpen: false }">
+            <label class="block text-xs font-bold text-gray-600 mb-1"
+              >Cliente *</label
+            >
+            <input type="hidden" name="client_id" :value="clientId" required />
+            <input
+              type="text"
+              x-model="clientName"
+              @input="searchOpen = true"
+              @click.outside="searchOpen = false"
+              :class="clientId ? 'border-green-400 bg-green-50 font-bold' : 'border-gray-300'"
+              class="w-full p-3 rounded-lg focus:ring-2 focus:ring-brand-500 transition"
+              placeholder="🔍 Buscar cliente..."
+              required
+              autocomplete="off"
+              hx-get="{% url 'search_clients' %}"
+              hx-trigger="keyup changed delay:200ms"
+              hx-target="#client-search-results"
+              name="client_search_display"
+            />
             <div
-                class="p-4 bg-white border-t border-gray-200 shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.1)] max-h-[50vh] overflow-y-auto">
-                <form action="{% url 'checkout' %}" method="POST" class="space-y-3">
-                    {% csrf_token %}
+              id="client-search-results"
+              class="absolute z-50 w-full"
+              x-show="searchOpen"
+            ></div>
+          </div>
 
-                    <!-- Client -->
-                    <div class="relative">
-                        <label class="block text-xs font-bold text-gray-600 mb-1">Cliente *</label>
-                        <input type="hidden" name="client_id" :value="clientId" required>
-                        <input type="text" x-model="clientName" @input="searchOpen = true"
-                            @click.outside="searchOpen = false"
-                            :class="clientId ? 'border-green-400 bg-green-50 font-bold' : 'border-gray-300'"
-                            class="w-full p-3 rounded-lg focus:ring-2 focus:ring-brand-500 transition"
-                            placeholder="🔍 Buscar cliente..." required autocomplete="off"
-                            hx-get="{% url 'search_clients' %}" hx-trigger="keyup changed delay:200ms"
-                            hx-target="#client-search-results" name="client_search_display">
-                        <div id="client-search-results" class="absolute z-50 w-full" x-show="searchOpen"></div>
-                    </div>
-
-                    <!-- Date & Payment in Row -->
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">Fecha</label>
-                            <input type="datetime-local" name="created_at"
-                                class="w-full p-2.5 rounded-lg border border-gray-300 text-xs">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">Pago</label>
-                            <select name="payment_method"
-                                class="w-full p-2.5 rounded-lg border border-gray-300 text-xs font-medium">
-                                <option value="CASH">💵 Contado</option>
-                                <option value="CREDIT">📝 Crédito</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Note -->
-                    <div>
-                        <label class="block text-xs font-bold text-gray-600 mb-1">Comentario</label>
-                        <textarea name="note" rows="2"
-                            class="w-full p-2.5 rounded-lg border border-gray-300 text-sm resize-none"
-                            placeholder="Detalles del trabajo..."></textarea>
-                    </div>
-
-                    <!-- Submit Button -->
-                    <button type="submit" :disabled="!clientId"
-                        :class="!clientId ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'bg-brand-400 hover:bg-brand-500'"
-                        class="w-full text-white font-bold py-4 rounded-xl transition shadow-lg active:scale-95 flex justify-center items-center gap-2 text-lg">
-                        COBRAR
-                    </button>
-                </form>
+          <!-- Date & Payment in Row -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-gray-600 mb-1"
+                >Fecha</label
+              >
+              <input
+                type="datetime-local"
+                name="created_at"
+                class="w-full p-2.5 rounded-lg border border-gray-300 text-xs"
+              />
             </div>
-        </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-600 mb-1"
+                >Pago</label
+              >
+              <select
+                name="payment_method"
+                class="w-full p-2.5 rounded-lg border border-gray-300 text-xs font-medium"
+              >
+                <option value="CASH">💵 Contado</option>
+                <option value="CREDIT">📝 Crédito</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Note -->
+          <div>
+            <label class="block text-xs font-bold text-gray-600 mb-1"
+              >Comentario</label
+            >
+            <textarea
+              name="note"
+              rows="2"
+              class="w-full p-2.5 rounded-lg border border-gray-300 text-sm resize-none"
+              placeholder="Detalles del trabajo..."
+            ></textarea>
+          </div>
+
+          <!-- Submit Button -->
+          <button
+            type="submit"
+            :disabled="!clientId"
+            :class="!clientId ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'bg-brand-400 hover:bg-brand-500'"
+            class="w-full text-white font-bold py-4 rounded-xl transition shadow-lg active:scale-95 flex justify-center items-center gap-2 text-lg"
+          >
+            COBRAR
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Desktop: Sidebar Cart (Hidden on Mobile) -->
+  <div
+    class="hidden md:flex w-96 bg-white rounded-xl shadow-lg border border-brand-200 flex-col h-full"
+  >
+    <!-- Cart Header -->
+    <div
+      class="p-4 border-b border-brand-200 bg-brand-600 text-white rounded-t-xl flex justify-between items-center shrink-0"
+    >
+      <h2 class="font-bold text-lg">🛒 Carrito</h2>
+      <button
+        class="text-xs bg-red-400 hover:bg-red-500 px-3 py-1.5 rounded-lg font-medium transition"
+        hx-post="{% url 'clear_cart' %}"
+        hx-target="#cart-items"
+      >
+        Limpiar
+      </button>
     </div>
 
-    <!-- Desktop: Sidebar Cart (Hidden on Mobile) -->
-    <div class="hidden md:flex w-96 bg-white rounded-xl shadow-lg border border-brand-200 flex-col h-full">
-        <!-- Cart Header -->
-        <div
-            class="p-4 border-b border-brand-200 bg-brand-600 text-white rounded-t-xl flex justify-between items-center shrink-0">
-            <h2 class="font-bold text-lg">🛒 Carrito</h2>
-            <button class="text-xs bg-red-400 hover:bg-red-500 px-3 py-1.5 rounded-lg font-medium transition"
-                hx-post="{% url 'clear_cart' %}" hx-target="#cart-items">
-                Limpiar
-            </button>
-        </div>
-
-        <!-- Cart Items -->
-        <div id="cart-items-desktop" class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">
-            {% include 'pos/partials/cart_items.html' with cart=request.session.cart %}
-        </div>
-
-        <!-- Checkout Form -->
-        <div class="p-4 bg-white border-t border-gray-200 shrink-0">
-            <form action="{% url 'checkout' %}" method="POST" class="space-y-3">
-                {% csrf_token %}
-
-                <!-- Client -->
-                <div class="relative" x-data="{ searchOpen: false, clientId: '', clientName: '' }">
-                    <label class="block text-xs font-bold text-gray-600 mb-1">Cliente *</label>
-                    <input type="hidden" name="client_id" :value="clientId" required>
-                    <input type="text" x-model="clientName" @input="searchOpen = true"
-                        @click.outside="searchOpen = false"
-                        :class="clientId ? 'border-green-400 bg-green-50 font-bold' : 'border-gray-300'"
-                        class="w-full p-2.5 rounded-lg focus:ring-2 focus:ring-brand-500 transition text-sm"
-                        placeholder="🔍 Buscar cliente..." required autocomplete="off"
-                        hx-get="{% url 'search_clients' %}" hx-trigger="keyup changed delay:200ms"
-                        hx-target="#client-search-results-desktop" name="client_search_display">
-                    <div id="client-search-results-desktop" class="absolute z-50 w-full" x-show="searchOpen"></div>
-                </div>
-
-                <!-- Date & Payment -->
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-600 mb-1">Fecha</label>
-                        <input type="datetime-local" name="created_at"
-                            class="w-full p-2 rounded-lg border border-gray-300 text-xs">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-600 mb-1">Pago</label>
-                        <select name="payment_method" class="w-full p-2 rounded-lg border border-gray-300 text-xs">
-                            <option value="CASH">💵 Contado</option>
-                            <option value="CREDIT">📝 Crédito</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Note -->
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">Comentario</label>
-                    <textarea name="note" rows="2"
-                        class="w-full p-2 rounded-lg border border-gray-300 text-sm resize-none"
-                        placeholder="Detalles..."></textarea>
-                </div>
-
-                <!-- Submit -->
-                <button type="submit" :disabled="!clientId"
-                    :class="!clientId ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-400'"
-                    class="w-full bg-brand-500 text-white font-bold py-3 rounded-lg transition shadow-lg">
-                    COBRAR TOTAL
-                </button>
-            </form>
-        </div>
+    <!-- Cart Items -->
+    <div
+      id="cart-items-desktop"
+      class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50"
+    >
+      {% include 'pos/partials/cart_items.html' with cart=request.session.cart %}
     </div>
+
+    <!-- Checkout Form -->
+    <div class="p-4 bg-white border-t border-gray-200 shrink-0">
+      <form action="{% url 'checkout' %}" method="POST" class="space-y-3">
+        {% csrf_token %}
+
+        <!-- Client -->
+        <div class="relative" x-data="{ searchOpen: false }">
+          <label class="block text-xs font-bold text-gray-600 mb-1"
+            >Cliente *</label
+          >
+          <input type="hidden" name="client_id" :value="clientId" required />
+          <input
+            type="text"
+            x-model="clientName"
+            @input="searchOpen = true"
+            @click.outside="searchOpen = false"
+            :class="clientId ? 'border-green-400 bg-green-50 font-bold' : 'border-gray-300'"
+            class="w-full p-2.5 rounded-lg focus:ring-2 focus:ring-brand-500 transition text-sm"
+            placeholder="🔍 Buscar cliente..."
+            required
+            autocomplete="off"
+            hx-get="{% url 'search_clients' %}"
+            hx-trigger="keyup changed delay:200ms"
+            hx-target="#client-search-results-desktop"
+            name="client_search_display"
+          />
+          <div
+            id="client-search-results-desktop"
+            class="absolute z-50 w-full"
+            x-show="searchOpen"
+          ></div>
+        </div>
+
+        <!-- Date & Payment -->
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-bold text-gray-600 mb-1"
+              >Fecha</label
+            >
+            <input
+              type="datetime-local"
+              name="created_at"
+              class="w-full p-2 rounded-lg border border-gray-300 text-xs"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-600 mb-1"
+              >Pago</label
+            >
+            <select
+              name="payment_method"
+              class="w-full p-2 rounded-lg border border-gray-300 text-xs"
+            >
+              <option value="CASH">💵 Contado</option>
+              <option value="CREDIT">📝 Crédito</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Note -->
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1"
+            >Comentario</label
+          >
+          <textarea
+            name="note"
+            rows="2"
+            class="w-full p-2 rounded-lg border border-gray-300 text-sm resize-none"
+            placeholder="Detalles..."
+          ></textarea>
+        </div>
+
+        <!-- Submit -->
+        <button
+          type="submit"
+          :disabled="!clientId"
+          :class="!clientId ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-400'"
+          class="w-full bg-brand-500 text-white font-bold py-3 rounded-lg transition shadow-lg"
+        >
+          COBRAR TOTAL
+        </button>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}

@@ -1,0 +1,63 @@
+{% load humanize %} {% for item in items %}
+<div
+  class="bg-white p-3 rounded-lg border border-gray-200 flex justify-between items-center"
+>
+  <div class="flex-1">
+    <div class="font-medium text-gray-800 text-sm">{{ item.product.name }}</div>
+    <div class="text-xs text-gray-500">
+      {{ item.quantity }} × ${{ item.price|intcomma }}
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <!-- Decrease Quantity -->
+    <button
+      hx-post="{% url 'update_sale_item' sale_id item.id %}"
+      hx-vals='{"action": "decrement"}'
+      hx-target="#sale-items"
+      hx-swap="innerHTML"
+      class="w-7 h-7 flex items-center justify-center bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-bold text-sm"
+    >
+      -
+    </button>
+
+    <span class="text-sm font-bold w-6 text-center">{{ item.quantity }}</span>
+
+    <!-- Increase Quantity -->
+    <button
+      hx-post="{% url 'update_sale_item' sale_id item.id %}"
+      hx-vals='{"action": "increment"}'
+      hx-target="#sale-items"
+      hx-swap="innerHTML"
+      class="w-7 h-7 flex items-center justify-center bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-bold text-sm"
+    >
+      +
+    </button>
+
+    <!-- Remove Item -->
+    <button
+      hx-post="{% url 'update_sale_item' sale_id item.id %}"
+      hx-vals='{"action": "remove"}'
+      hx-target="#sale-items"
+      hx-swap="innerHTML"
+      hx-confirm="¿Eliminar este producto?"
+      class="w-7 h-7 flex items-center justify-center bg-red-100 text-red-600 rounded hover:bg-red-200 text-xs"
+    >
+      ×
+    </button>
+  </div>
+</div>
+{% empty %}
+<div class="text-center text-gray-400 py-4 text-sm">
+  No hay productos en esta venta
+</div>
+{% endfor %}
+
+<!-- Update total with OOB swap -->
+<div
+  id="sale-total"
+  hx-swap-oob="true"
+  class="border-t border-brand-200 pt-3 flex justify-between items-center font-bold text-gray-800"
+>
+  <span>Total:</span>
+  <span class="text-lg text-brand-500">${{ total|intcomma }}</span>
+</div>

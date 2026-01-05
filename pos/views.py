@@ -106,27 +106,24 @@ def client_statement(request, client_id):
     timeline.sort(key=lambda x: x['date'])
     
     running_balance = 0
-    reversed_timeline = []
+    calculated_timeline = []
     
     for event in timeline:
         if event['type'] == 'SALE':
-            running_balance += float(event['amount'])
+            running_balance += event['amount']
             event['debit'] = event['amount']
             event['credit'] = 0
         else:
-            running_balance -= float(event['amount'])
+            running_balance -= event['amount']
             event['debit'] = 0
             event['credit'] = event['amount']
         
         event['balance'] = running_balance
-        reversed_timeline.append(event)
-        
-    # Reverse for display (newest first) but keep balance correct
-    reversed_timeline.reverse()
+        calculated_timeline.append(event)
 
     context = {
         'client': client,
-        'timeline': reversed_timeline,
+        'timeline': calculated_timeline,  # Chronological order (oldest first)
         'total_credit': total_credit,
         'total_paid': total_paid,
         'current_debt': current_debt,
@@ -152,23 +149,22 @@ def client_public_statement(request, client_id):
         
     timeline.sort(key=lambda x: x['date'])
     running_balance = 0
-    reversed_timeline = []
+    calculated_timeline = []
     for event in timeline:
         if event['type'] == 'SALE':
-            running_balance += float(event['amount'])
+            running_balance += event['amount']
             event['debit'] = event['amount']
             event['credit'] = 0
         else:
-            running_balance -= float(event['amount'])
+            running_balance -= event['amount']
             event['debit'] = 0
             event['credit'] = event['amount']
         event['balance'] = running_balance
-        reversed_timeline.append(event)
-    reversed_timeline.reverse()
+        calculated_timeline.append(event)
 
     context = {
         'client': client,
-        'timeline': reversed_timeline,
+        'timeline': calculated_timeline,  # Chronological order (oldest first)
         'total_credit': total_credit,
         'total_paid': total_paid,
         'current_debt': current_debt,
@@ -234,7 +230,7 @@ def add_to_cart(request):
         cart[product_id_str] = {
             'id': product.id,
             'name': product.name,
-            'price': float(product.price),
+            'price': product.price,
             'quantity': quantity_add,
         }
     
@@ -355,7 +351,7 @@ def add_client(request):
         address = request.POST.get('address')
         
         try:
-            initial_debt = float(request.POST.get('initial_debt', 0))
+            initial_debt = int(request.POST.get('initial_debt', 0) or 0)
         except ValueError:
             initial_debt = 0
             
@@ -471,7 +467,7 @@ def report_analytics(request):
     ).order_by('date__date')
     
     labels_dates = [item['date__date'].strftime('%d/%m') for item in daily_sales]
-    data_sales = [float(item['daily_total']) for item in daily_sales]
+    data_sales = [int(item['daily_total']) for item in daily_sales]
     
     # 3. KPI Metrics
     total_period = sales_qs.aggregate(Sum('total'))['total__sum'] or 0
@@ -540,11 +536,11 @@ def client_statement_pdf(request, client_id):
     # 1. Calculate running balance forward
     for event in timeline:
         if event['type'] == 'SALE':
-            running_balance += float(event['amount'])
+            running_balance += event['amount']
             event['debit'] = event['amount']
             event['credit'] = 0
         else:
-            running_balance -= float(event['amount'])
+            running_balance -= event['amount']
             event['debit'] = 0
             event['credit'] = event['amount']
         
@@ -583,11 +579,9 @@ def client_statement_pdf(request, client_id):
     # User said "reset... only what he owes".
     # Existing 'reversed_timeline' implies newest first.
     
-    reversed_timeline = list(reversed(calculated_timeline))
-
     context = {
         'client': client,
-        'timeline': reversed_timeline,
+        'timeline': calculated_timeline,  # Chronological order (oldest first)
         'total_credit': total_credit,
         'total_paid': total_paid,
         'current_debt': current_debt,
@@ -712,3 +706,113 @@ def edit_sale(request, sale_id):
     # Format date for datetime-local input
     local_date = timezone.localtime(sale.date).strftime('%Y-%m-%dT%H:%M')
     return render(request, 'pos/edit_sale.html', {'sale': sale, 'clients': clients, 'formatted_date': local_date})
+
+@login_required
+def search_products_for_sale(request, sale_id):
+    """Search products to add to a sale"""
+    query = request.GET.get('search', '')
+    sale = get_object_or_404(Sale, id=sale_id)
+    
+    if query:
+        products = Product.objects.filter(name__icontains=query)[:10]
+    else:
+        products = []
+    
+    return render(request, 'pos/partials/product_search_sale.html', {
+        'products': products,
+        'sale_id': sale_id,
+        'search_query': query
+    })
+
+@login_required
+def add_product_to_sale(request, sale_id):
+    """Add a product to an existing sale"""
+    if request.method == 'POST':
+        sale = get_object_or_404(Sale, id=sale_id)
+        product_id = request.POST.get('product_id')
+        product = get_object_or_404(Product, id=product_id)
+        
+        # Check if product already exists in sale
+        existing_item = sale.items.filter(product=product).first()
+        
+        if existing_item:
+            # Increment quantity
+            existing_item.quantity += 1
+            existing_item.save()
+        else:
+            # Create new item
+            SaleItem.objects.create(
+                sale=sale,
+                product=product,
+                quantity=1,
+                price=product.price
+            )
+        
+        # Update stock
+        product.stock -= 1
+        product.save()
+        
+        # Recalculate total
+        sale.total = sum(item.subtotal for item in sale.items.all())
+        sale.save()
+        
+        # Return updated items list
+        items = sale.items.all()
+        return render(request, 'pos/partials/sale_items.html', {
+            'items': items,
+            'sale_id': sale_id,
+            'total': sale.total
+        })
+    
+    return HttpResponse(status=400)
+
+@login_required
+def update_sale_item(request, sale_id, item_id):
+    """Update quantity or remove a sale item"""
+    if request.method == 'POST':
+        sale = get_object_or_404(Sale, id=sale_id)
+        item = get_object_or_404(SaleItem, id=item_id, sale=sale)
+        action = request.POST.get('action')
+        
+        if action == 'increment':
+            # Increase quantity
+            item.quantity += 1
+            item.save()
+            # Decrease stock
+            item.product.stock -= 1
+            item.product.save()
+            
+        elif action == 'decrement':
+            if item.quantity > 1:
+                # Decrease quantity
+                item.quantity -= 1
+                item.save()
+                # Increase stock
+                item.product.stock += 1
+                item.product.save()
+            else:
+                # Remove item if quantity would be 0
+                item.product.stock += item.quantity
+                item.product.save()
+                item.delete()
+                
+        elif action == 'remove':
+            # Return stock
+            item.product.stock += item.quantity
+            item.product.save()
+            # Delete item
+            item.delete()
+        
+        # Recalculate total
+        sale.total = sum(i.subtotal for i in sale.items.all())
+        sale.save()
+        
+        # Return updated items list
+        items = sale.items.all()
+        return render(request, 'pos/partials/sale_items.html', {
+            'items': items,
+            'sale_id': sale_id,
+            'total': sale.total
+        })
+    
+    return HttpResponse(status=400)

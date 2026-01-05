@@ -1,54 +1,150 @@
 {% extends 'pos/base.html' %}
+{% load humanize %}
 
 {% block content %}
-<div class="max-w-xl mx-auto bg-white p-8 rounded-xl shadow-sm border border-brand-100">
+<div class="max-w-4xl mx-auto bg-white p-6 md:p-8 rounded-xl shadow-sm border border-brand-100"
+    x-data="{ searchOpen: false }">
     <div class="flex justify-between items-center mb-6">
-        <h2 class="text-2xl font-bold text-gray-800">Editar Factura #{{ sale.id }}</h2>
-        <a href="{% url 'invoice_detail' sale.id %}" class="text-gray-500 hover:text-gray-700">Cancelar</a>
+        <h2 class="text-2xl font-bold text-gray-800">✏️ Editar Factura #{{ sale.id }}</h2>
+        <a href="{% url 'invoice_detail' sale.id %}" class="text-gray-500 hover:text-gray-700 font-medium">← Volver</a>
     </div>
 
-    <form method="post" class="space-y-6">
-        {% csrf_token %}
+    <div class="grid md:grid-cols-2 gap-6">
+        <!-- Left Column: Sale Info -->
+        <div class="space-y-6">
+            <form method="post" class="space-y-4">
+                {% csrf_token %}
 
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de Venta</label>
-            <input type="datetime-local" name="date" value="{{ formatted_date }}" required
-                class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">
-            <p class="text-xs text-gray-500 mt-1">Formato: DD/MM/AAAA HH:MM (Zona Horaria Colombia)</p>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de Venta</label>
+                    <input type="datetime-local" name="date" value="{{ formatted_date }}" required
+                        class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">
+                    <p class="text-xs text-gray-500 mt-1">Formato: DD/MM/AAAA HH:MM</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+                    <select name="client_id"
+                        class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">
+                        {% for client in clients %}
+                        <option value="{{ client.id }}" {% if client.id == sale.client.id %}selected{% endif %}>
+                            {{ client.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Comentario / Notas</label>
+                    <textarea name="note" rows="3"
+                        class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">{{ sale.note|default:'' }}</textarea>
+                </div>
+
+                <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                    <p class="text-xs text-yellow-800 font-medium">⚠️ Advertencia</p>
+                    <p class="text-xs text-yellow-700 mt-1">
+                        Cambiar la fecha o el cliente puede afectar los reportes y estados de cuenta.
+                    </p>
+                </div>
+
+                <button type="submit"
+                    class="w-full py-3 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-md transition">
+                    💾 Guardar Cambios
+                </button>
+            </form>
         </div>
 
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
-            <select name="client_id"
-                class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">
-                {% for client in clients %}
-                <option value="{{ client.id }}" {% if client.id == sale.client.id %}selected{% endif %}>
-                    {{ client.name }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
+        <!-- Right Column: Items Management -->
+        <div class="space-y-4">
+            <div class="bg-brand-50 p-4 rounded-lg border border-brand-200">
+                <h3 class="font-bold text-gray-800 mb-3">🛒 Productos de la Venta</h3>
+                
+                <!-- Current Items -->
+                <div id="sale-items" class="space-y-2 mb-4">
+                    {% for item in sale.items.all %}
+                    <div class="bg-white p-3 rounded-lg border border-gray-200 flex justify-between items-center">
+                        <div class="flex-1">
+                            <div class="font-medium text-gray-800 text-sm">{{ item.product.name }}</div>
+                            <div class="text-xs text-gray-500">
+                                {{ item.quantity }} × ${{ item.price|intcomma }}
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <!-- Decrease Quantity -->
+                            <button
+                                hx-post="{% url 'update_sale_item' sale.id item.id %}"
+                                hx-vals='{"action": "decrement"}'
+                                hx-target="#sale-items"
+                                hx-swap="innerHTML"
+                                class="w-7 h-7 flex items-center justify-center bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-bold text-sm">
+                                -
+                            </button>
+                            
+                            <span class="text-sm font-bold w-6 text-center">{{ item.quantity }}</span>
+                            
+                            <!-- Increase Quantity -->
+                            <button
+                                hx-post="{% url 'update_sale_item' sale.id item.id %}"
+                                hx-vals='{"action": "increment"}'
+                                hx-target="#sale-items"
+                                hx-swap="innerHTML"
+                                class="w-7 h-7 flex items-center justify-center bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-bold text-sm">
+                                +
+                            </button>
+                            
+                            <!-- Remove Item -->
+                            <button
+                                hx-post="{% url 'update_sale_item' sale.id item.id %}"
+                                hx-vals='{"action": "remove"}'
+                                hx-target="#sale-items"
+                                hx-swap="innerHTML"
+                                hx-confirm="¿Eliminar este producto?"
+                                class="w-7 h-7 flex items-center justify-center bg-red-100 text-red-600 rounded hover:bg-red-200 text-xs">
+                                ×
+                            </button>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-gray-400 py-4 text-sm">
+                        No hay productos en esta venta
+                    </div>
+                    {% endfor %}
+                </div>
 
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Comentario / Notas</label>
-            <textarea name="note" rows="3"
-                class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">{{ sale.note|default:'' }}</textarea>
-        </div>
+                <!-- Total -->
+                <div id="sale-total" class="border-t border-brand-200 pt-3 flex justify-between items-center font-bold text-gray-800">
+                    <span>Total:</span>
+                    <span class="text-lg text-brand-500">${{ sale.total|intcomma }}</span>
+                </div>
+            </div>
 
-        <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-            <p class="text-sm text-yellow-800 font-medium">⚠️ Advertencia</p>
-            <p class="text-xs text-yellow-700 mt-1">
-                Cambiar la fecha o el cliente puede afectar los reportes diarios y los estados de cuenta.
-                Asegúrate de que la información sea correcta.
-            </p>
+            <!-- Add Product Section -->
+            <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+                <h3 class="font-bold text-gray-800 mb-3">➕ Agregar Producto</h3>
+                
+                <div class="relative">
+                    <input type="text" 
+                        name="search"
+                        placeholder="🔍 Buscar producto..."
+                        class="w-full p-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 text-sm"
+                        autocomplete="off"
+                        @input="searchOpen = true"
+                        @click.outside="searchOpen = false"
+                        hx-get="{% url 'search_products_for_sale' sale.id %}"
+                        hx-trigger="keyup changed delay:200ms"
+                        hx-target="#product-search-results">
+                    
+                    <div id="product-search-results" 
+                        class="absolute z-50 w-full mt-1" 
+                        x-show="searchOpen">
+                    </div>
+                </div>
+                
+                <p class="text-xs text-gray-600 mt-2">
+                    💡 Busca y selecciona productos para agregarlos a la venta
+                </p>
+            </div>
         </div>
-
-        <div class="pt-4">
-            <button type="submit"
-                class="w-full py-3 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-md">
-                Actualizar Factura
-            </button>
-        </div>
-    </form>
+    </div>
 </div>
 {% endblock %}

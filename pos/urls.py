@@ -35,4 +35,7 @@ urlpatterns = [
     path('inventory/add-stock/<int:product_id>/', views.add_stock, name='add_stock'),
     path('clients/edit/<int:client_id>/', views.edit_client, name='edit_client'),
     path('invoice/edit/<int:sale_id>/', views.edit_sale, name='edit_sale'),
+    path('invoice/<int:sale_id>/search-products/', views.search_products_for_sale, name='search_products_for_sale'),
+    path('invoice/<int:sale_id>/add-product/', views.add_product_to_sale, name='add_product_to_sale'),
+    path('invoice/<int:sale_id>/item/<int:item_id>/update/', views.update_sale_item, name='update_sale_item'),
 ]
