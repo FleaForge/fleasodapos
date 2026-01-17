@@ -66,33 +66,25 @@ def clients(request):
         return render(request, 'pos/partials/client_list.html', {'clients': clients_list})
     return render(request, 'pos/clients.html', {'clients': clients_list})
 
-@login_required
-def client_statement(request, client_id):
-    client = get_object_or_404(Client, id=client_id)
-    sales = Sale.objects.filter(client=client).order_by('-date')
-    
-    # Calculate summary fields for context
-    total_credit = sales.filter(payment_method='CREDIT').aggregate(Sum('total'))['total__sum'] or 0
-    # Payment query is done below but we need sum now
-    total_paid = Payment.objects.filter(client=client).aggregate(Sum('amount'))['amount__sum'] or 0
-    current_debt = total_credit - total_paid
+def get_account_timeline(client):
+    sales = Sale.objects.filter(client=client).order_by('date')
+    payments = Payment.objects.filter(client=client).order_by('date')
 
-    # Create unified timeline
     timeline = []
     
-    # Add Credit Sales to timeline
-    for sale in sales.filter(payment_method='CREDIT'):
-        timeline.append({
-            'type': 'SALE',
-            'date': sale.date,
-            'amount': sale.total,
-            'ref': f"Factura #{sale.id}",
-            'items': sale.items.all(), # Prefetch would be better but for simple app is ok
-            'object': sale
-        })
+    # Add Credit Sales
+    for sale in sales:
+        if sale.payment_method == 'CREDIT':
+            timeline.append({
+                'type': 'SALE',
+                'date': sale.date,
+                'amount': sale.total,
+                'ref': f"Factura #{sale.id}",
+                'items': sale.items.all(),
+                'object': sale
+            })
         
-    # Add Payments to timeline
-    payments = Payment.objects.filter(client=client).order_by('-date')
+    # Add Payments
     for payment in payments:
         timeline.append({
             'type': 'PAYMENT',
@@ -102,13 +94,14 @@ def client_statement(request, client_id):
             'object': payment
         })
         
-    # Sort by date ascending to calculate running balance
+    # Sort chronologically (Oldest first)
     timeline.sort(key=lambda x: x['date'])
     
     running_balance = 0
-    calculated_timeline = []
+    cutoff_index = -1
     
-    for event in timeline:
+    calculated_timeline = []
+    for i, event in enumerate(timeline):
         if event['type'] == 'SALE':
             running_balance += event['amount']
             event['debit'] = event['amount']
@@ -120,53 +113,76 @@ def client_statement(request, client_id):
         
         event['balance'] = running_balance
         calculated_timeline.append(event)
+        
+        # Check for cutoff (balance effectively 0)
+        if abs(running_balance) < 1:
+            cutoff_index = i
+            
+    return calculated_timeline, cutoff_index
+
+@login_required
+def client_statement(request, client_id):
+    client = get_object_or_404(Client, id=client_id)
+    
+    full_timeline, cutoff_index = get_account_timeline(client)
+    
+    # Split timeline into History and Active
+    if cutoff_index != -1:
+        history_timeline = full_timeline[:cutoff_index+1]
+        active_timeline = full_timeline[cutoff_index+1:]
+        # Reverse active timeline for display? No, keep chronological usually for statements.
+        
+        # If reset, the running balance of active list continues from 0.
+        # Wait, the calculation in get_account_timeline is continuous.
+        # If balance was 0 at cutoff, the next item starting balance is technically correct (0 +/- amount).
+        # We don't need to recalculate.
+    else:
+        history_timeline = []
+        active_timeline = full_timeline
+
+    # Summary fields
+    # We show LIFETIME totals or ACTIVE totals? User request: "se reinicie la información".
+    # Assuming "reset" means display purposes. 
+    # Current debt is strictly the final balance.
+    
+    current_debt = active_timeline[-1]['balance'] if active_timeline else 0
+    
+    # Let's calculate totals for the ACTIVE period only, to match the "reset" feel.
+    active_credit = sum(e['amount'] for e in active_timeline if e['type'] == 'SALE')
+    active_paid = sum(e['amount'] for e in active_timeline if e['type'] == 'PAYMENT')
 
     context = {
         'client': client,
-        'timeline': calculated_timeline,  # Chronological order (oldest first)
-        'total_credit': total_credit,
-        'total_paid': total_paid,
+        'timeline': active_timeline, 
+        'history_timeline': history_timeline,
+        'total_credit': active_credit,
+        'total_paid': active_paid,
         'current_debt': current_debt,
-        'now': timezone.now()
+        'now': timezone.now(),
+        'is_public': False
     }
     return render(request, 'pos/client_statement.html', context)
 
 def client_public_statement(request, client_id):
     client = get_object_or_404(Client, id=client_id)
-    sales = Sale.objects.filter(client=client).order_by('-date')
-    payments = Payment.objects.filter(client=client).order_by('-date')
     
-    total_credit = sales.filter(payment_method='CREDIT').aggregate(Sum('total'))['total__sum'] or 0
-    total_paid = payments.aggregate(Sum('amount'))['amount__sum'] or 0
-    current_debt = total_credit - total_paid
-
-    timeline = []
-    for sale in sales.filter(payment_method='CREDIT'):
-        timeline.append({ 'type': 'SALE', 'date': sale.date, 'amount': sale.total, 'ref': f"Factura #{sale.id}", 'items': sale.items.all(), 'object': sale })
+    full_timeline, cutoff_index = get_account_timeline(client)
+    
+    if cutoff_index != -1:
+        active_timeline = full_timeline[cutoff_index+1:]
+    else:
+        active_timeline = full_timeline
         
-    for payment in payments:
-        timeline.append({ 'type': 'PAYMENT', 'date': payment.date, 'amount': payment.amount, 'ref': payment.note or "Abono", 'object': payment })
-        
-    timeline.sort(key=lambda x: x['date'])
-    running_balance = 0
-    calculated_timeline = []
-    for event in timeline:
-        if event['type'] == 'SALE':
-            running_balance += event['amount']
-            event['debit'] = event['amount']
-            event['credit'] = 0
-        else:
-            running_balance -= event['amount']
-            event['debit'] = 0
-            event['credit'] = event['amount']
-        event['balance'] = running_balance
-        calculated_timeline.append(event)
+    current_debt = active_timeline[-1]['balance'] if active_timeline else 0
+    active_credit = sum(e['amount'] for e in active_timeline if e['type'] == 'SALE')
+    active_paid = sum(e['amount'] for e in active_timeline if e['type'] == 'PAYMENT')
 
     context = {
         'client': client,
-        'timeline': calculated_timeline,  # Chronological order (oldest first)
-        'total_credit': total_credit,
-        'total_paid': total_paid,
+        'timeline': active_timeline,
+        # No history passed
+        'total_credit': active_credit,
+        'total_paid': active_paid,
         'current_debt': current_debt,
         'now': timezone.now(),
         'is_public': True
@@ -500,93 +516,25 @@ def invoice_detail(request, sale_id):
 
 def client_statement_pdf(request, client_id):
     client = get_object_or_404(Client, id=client_id)
-    sales = Sale.objects.filter(client=client).order_by('-date')
     
-    total_credit = sales.filter(payment_method='CREDIT').aggregate(Sum('total'))['total__sum'] or 0
-    total_paid = Payment.objects.filter(client=client).aggregate(Sum('amount'))['amount__sum'] or 0
-    current_debt = total_credit - total_paid
+    full_timeline, cutoff_index = get_account_timeline(client)
+    
+    if cutoff_index != -1:
+        active_timeline = full_timeline[cutoff_index+1:]
+    else:
+        active_timeline = full_timeline
+        
+    current_debt = active_timeline[-1]['balance'] if active_timeline else 0
+    active_credit = sum(e['amount'] for e in active_timeline if e['type'] == 'SALE')
+    active_paid = sum(e['amount'] for e in active_timeline if e['type'] == 'PAYMENT')
 
-    timeline = []
-    
-    for sale in sales.filter(payment_method='CREDIT'):
-        timeline.append({
-            'type': 'SALE',
-            'date': sale.date,
-            'amount': sale.total,
-            'ref': f"Factura #{sale.id}",
-            'items': sale.items.all(),
-            'object': sale
-        })
-        
-    payments = Payment.objects.filter(client=client).order_by('-date')
-    for payment in payments:
-        timeline.append({
-            'type': 'PAYMENT',
-            'date': payment.date,
-            'amount': payment.amount,
-            'ref': payment.note or "Abono",
-            'object': payment
-        })
-        
-    timeline.sort(key=lambda x: x['date'])
-    
-    running_balance = 0
-    calculated_timeline = []
-    
-    # 1. Calculate running balance forward
-    for event in timeline:
-        if event['type'] == 'SALE':
-            running_balance += event['amount']
-            event['debit'] = event['amount']
-            event['credit'] = 0
-        else:
-            running_balance -= event['amount']
-            event['debit'] = 0
-            event['credit'] = event['amount']
-        
-        event['balance'] = running_balance
-        calculated_timeline.append(event)
-
-    # 2. Filter logic: Find the last time balance was close to 0 (allow for small float diffs if needed, but 0 is safer for now)
-    # If the user has a current debt, we want the history starting AFTER the last 0 balance.
-    # If the user is currently 0, we might want to show the last cycle? Or just empty. 
-    # Usually "what they owe" implies current cycle.
-    
-    cutoff_index = -1
-    for i, event in enumerate(calculated_timeline):
-        # We check if balance is 0. If so, the next item is the start of new cycle.
-        if abs(event['balance']) < 0.01:
-            cutoff_index = i
-            
-    # Slice the timeline to keep only events occurring AFTER the cutoff
-    if cutoff_index != -1 and cutoff_index < len(calculated_timeline) - 1:
-        # Check if we are at the very end (balance is 0 currently)
-        # If current debt is 0, we can show just the "Settled" state or the last cycle? 
-        # User said "solo salir lo que debe y lo que abono". 
-        # If debt is 0, maybe showing nothing is weird. Let's assume we show active items.
-        
-        if current_debt > 0.01:
-             calculated_timeline = calculated_timeline[cutoff_index+1:]
-        else:
-             # If completely paid off, maybe show the last cycle? 
-             # Or as per user "reset", it might mean show nothing or just header. 
-             # Let's keep the logic simple: Show Active Cycle.
-             # If balance is 0, list might be empty.
-             calculated_timeline = [] 
-
-    # Reverse for display (actives usually show newest first, but for PDF statement printed sometimes chronological is better? 
-    # The existing code reversed it. Let's keep it reversed or check user intent.
-    # User said "reset... only what he owes".
-    # Existing 'reversed_timeline' implies newest first.
-    
     context = {
         'client': client,
-        'timeline': calculated_timeline,  # Chronological order (oldest first)
-        'total_credit': total_credit,
-        'total_paid': total_paid,
+        'timeline': active_timeline,  # Chronological order
+        'total_credit': active_credit,
+        'total_paid': active_paid,
         'current_debt': current_debt,
         'now': timezone.now(),
-        # Pass full URL for static/media if needed (xhtml2pdf handles relative usually if configured, but let's keep simple)
     }
     
     template_path = 'pos/pdf/client_statement_pdf.html'

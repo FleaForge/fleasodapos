@@ -82,20 +82,8 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
-            {% for event in timeline %} {% if event.balance == 0 %}
-            <tr class="bg-green-50 border-y-2 border-green-300">
-              <td
-                colspan="4"
-                class="py-3 text-center text-green-700 font-bold text-sm uppercase tracking-wide"
-              >
-                ✅ Cuenta Saldada — Historial Previo Abajo
-              </td>
-            </tr>
-            {% endif %}
-
-            <tr
-              class="hover:bg-gray-50 transition {% if event.balance == 0 %}bg-green-50{% endif %}"
-            >
+            {% for event in timeline %}
+            <tr class="hover:bg-gray-50 transition">
               <td
                 class="py-3 px-3 whitespace-nowrap align-top text-gray-500 text-xs"
               >
@@ -182,18 +170,108 @@
                   >-${{ event.amount|intcomma }}</span
                 >
                 {% endif %}
+                <div class="text-xs text-gray-400 mt-1">
+                  Saldo: ${{ event.balance|intcomma }}
+                </div>
               </td>
             </tr>
             {% empty %}
             <tr>
-              <td colspan="4" class="py-8 text-center text-gray-400">
-                Sin movimientos registrados.
+              <td colspan="4" class="py-12 text-center text-gray-400">
+                <div class="flex flex-col items-center justify-center">
+                  <span class="text-4xl mb-2">🎉</span>
+                  <p class="font-bold text-gray-600">Cuenta al día</p>
+                  <p class="text-xs mt-1">No hay deuda activa pendiente.</p>
+                </div>
               </td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
+
+      <!-- History Section (Admin Only) -->
+      {% if history_timeline %}
+      <div
+        class="mt-8 no-print border-t border-gray-200 pt-6"
+        x-data="{ showHistory: false }"
+      >
+        <button
+          @click="showHistory = !showHistory"
+          class="flex items-center gap-2 text-gray-500 font-bold hover:text-gray-700 transition w-full justify-between bg-gray-50 p-3 rounded-lg"
+        >
+          <span class="flex items-center gap-2">
+            🕒 Ver Historial Anterior (Saldado)
+            <span class="text-sm font-normal text-gray-400"
+              >({{ history_timeline|length }} movimientos)</span
+            >
+          </span>
+          <svg
+            :class="showHistory ? 'rotate-180' : ''"
+            class="w-5 h-5 transition-transform"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M19 9l-7 7-7-7"
+            ></path>
+          </svg>
+        </button>
+
+        <div
+          x-show="showHistory"
+          style="display: none"
+          class="mt-4 transition-all"
+        >
+          <div class="overflow-x-auto opacity-75">
+            <table class="w-full text-left text-sm grayscale">
+              <thead class="bg-gray-100 border-b-2 border-gray-300">
+                <tr class="text-gray-500 uppercase tracking-wider text-xs">
+                  <th class="py-2 px-3 w-24">Fecha</th>
+                  <th class="py-2 px-3">Movimiento</th>
+                  <th class="py-2 px-3 w-32">Comentario</th>
+                  <th class="py-2 px-3 text-right w-32">Monto</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 bg-gray-50">
+                {% for event in history_timeline reversed %}
+                <tr>
+                  <td
+                    class="py-2 px-3 whitespace-nowrap align-top text-gray-400 text-xs"
+                  >
+                    {{ event.date|date:"d/m/Y" }}
+                  </td>
+                  <td class="py-2 px-3 align-top text-gray-500">
+                    <span class="font-bold block">{{ event.ref }}</span>
+                    <span class="text-xs block">
+                      {% if event.type == 'SALE' %}COMPRA{% else %}ABONO{% endif %}
+                    </span>
+                  </td>
+                  <td class="py-2 px-3 align-top text-xs text-gray-400 italic">
+                    {{ event.object.note|default:""|truncatechars:30 }}
+                  </td>
+                  <td class="py-2 px-3 text-right align-top text-gray-500">
+                    {% if event.type == 'SALE' %}
+                    <span class="">+${{ event.amount|intcomma }}</span>
+                    {% else %}
+                    <span class="">-${{ event.amount|intcomma }}</span>
+                    {% endif %}
+                    <div class="text-xs text-gray-400">
+                      Saldo: ${{ event.balance|intcomma }}
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      {% endif %}
 
       <!-- Footer Signatures -->
       <div
