@@ -201,8 +201,19 @@
                     <div>
                         <span class="badge badge-compra">FACTURA #{{ sale.id }}</span>
                     </div>
+                    
+                    {% if sale.items.all %}
+                    <div class="items-detail" style="margin-top:2px; font-size:9px; color:#555; background:#f9f9f9; padding:2px 5px; border-radius:2px;">
+                        <strong>Contenido:</strong><br>
+                        {% for item in sale.items.all %}
+                            {{ item.quantity }}x {{ item.product.name|truncatechars:25 }} - <strong>${{ item.subtotal|intcomma }}</strong><br>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
                     {% if sale.allocations.all %}
-                    <div class="items-detail">
+                    <div class="items-detail" style="margin-top:2px; font-size:9px;">
+                        <strong>Abonos:</strong><br>
                         {% for alloc in sale.allocations.all %}
                             {% if not alloc.payment.is_annulled %}
                             - Pago {{ alloc.payment.date|date:"d/m/y" }}: <strong style="color:#388e3c;">+${{ alloc.amount|intcomma }}</strong><br>

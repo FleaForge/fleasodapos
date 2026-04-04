@@ -99,6 +99,23 @@
               </td>
               <td class="py-3 px-3 align-top">
                 <div class="font-bold text-gray-700">Factura #{{ sale.id }}</div>
+                
+                {% if sale.items.all %}
+                <details class="mt-1 no-print">
+                  <summary class="text-xs text-blue-600 flex items-center gap-1 hover:text-blue-800 cursor-pointer select-none">
+                    Ver items ({{ sale.items.count }}) <span class="text-[10px]">▼</span>
+                  </summary>
+                  <div class="mt-1 bg-gray-50 border border-gray-200 rounded p-2 text-[11px] text-gray-600 shadow-sm">
+                    {% for item in sale.items.all %}
+                    <div class="flex justify-between border-b border-gray-100 last:border-0 py-1">
+                      <span>{{ item.quantity }}x {{ item.product.name|truncatechars:25 }}</span>
+                      <span class="font-bold">${{ item.subtotal|intcomma }}</span>
+                    </div>
+                    {% endfor %}
+                  </div>
+                </details>
+                {% endif %}
+
                 {% if sale.amount_paid > 0 %}
                 <button @click="expanded = !expanded" class="text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 px-2 py-1 rounded transition mt-1 flex items-center gap-1 no-print">
                   <span x-text="expanded ? 'Ocultar Abonos' : 'Ver Detalle Abonos'"></span>
