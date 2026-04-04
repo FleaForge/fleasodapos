@@ -38,4 +38,6 @@ urlpatterns = [
     path('invoice/<int:sale_id>/search-products/', views.search_products_for_sale, name='search_products_for_sale'),
     path('invoice/<int:sale_id>/add-product/', views.add_product_to_sale, name='add_product_to_sale'),
     path('invoice/<int:sale_id>/item/<int:item_id>/update/', views.update_sale_item, name='update_sale_item'),
+    path('invoice/annul/<int:sale_id>/', views.annul_sale, name='annul_sale'),
+    path('invoice/payment/annul/<int:payment_id>/', views.annul_payment, name='annul_payment'),
 ]

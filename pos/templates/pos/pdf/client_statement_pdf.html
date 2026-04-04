@@ -94,6 +94,11 @@
             color: #2e7d32;
         }
 
+        .badge-anulacion {
+            background-color: #f5f5f5;
+            color: #616161;
+        }
+
         .amount-compra {
             color: #d32f2f;
             font-weight: bold;
@@ -102,6 +107,12 @@
 
         .amount-abono {
             color: #388e3c;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .amount-anulacion {
+            color: #757575;
             font-weight: bold;
             font-size: 12px;
         }
@@ -172,60 +183,47 @@
     <table>
         <thead>
             <tr>
-                <th width="12%">Fecha</th>
-                <th width="50%">Movimiento</th>
-                <th width="18%">Comentario</th>
-                <th width="20%" class="text-right">Monto</th>
+                <th width="15%">Emisión</th>
+                <th width="40%">Comprobante</th>
+                <th width="15%" class="text-right">Valor Inicial</th>
+                <th width="15%" class="text-right">Abonado</th>
+                <th width="15%" class="text-right">Falta</th>
             </tr>
         </thead>
         <tbody>
-            {% for event in timeline %}
-            
-            {# Visual Restart if Balance is 0 #}
-            {% if event.balance == 0 %}
-            <tr>
-                <td colspan="4" class="reset-row">
-                    ✓ Cuenta Saldada — Historial Previo Abajo
-                </td>
-            </tr>
-            {% endif %}
-
+            {% for sale in pending_sales %}
             <tr>
                 <td style="font-size: 10px; color: #666;">
-                    {{ event.date|date:"d/m/Y" }}<br>
-                    <span style="color: #999;">{{ event.date|date:"H:i" }}</span>
+                    {{ sale.date|date:"d/m/Y" }}<br>
+                    <span style="color: #999;">{{ sale.date|date:"H:i" }}</span>
                 </td>
                 <td>
                     <div>
-                        {% if event.type == 'SALE' %}
-                        <span class="badge badge-compra">COMPRA</span>
-                        {% else %}
-                        <span class="badge badge-abono">ABONO</span>
-                        {% endif %}
-                        <strong>{{ event.ref }}</strong>
+                        <span class="badge badge-compra">FACTURA #{{ sale.id }}</span>
                     </div>
-                    {% if event.type == 'SALE' %}
+                    {% if sale.allocations.all %}
                     <div class="items-detail">
-                        {% for item in event.items %}
-                        - {{ item.product.name }} (x{{ item.quantity }})<br>
+                        {% for alloc in sale.allocations.all %}
+                            {% if not alloc.payment.is_annulled %}
+                            - Pago {{ alloc.payment.date|date:"d/m/y" }}: <strong style="color:#388e3c;">+${{ alloc.amount|intcomma }}</strong><br>
+                            {% endif %}
                         {% endfor %}
                     </div>
                     {% endif %}
                 </td>
-                <td style="font-style: italic; color: #555; font-size: 10px;">
-                    {{ event.object.note|default_if_none:""|linebreaksbr }}
+                <td class="text-right" style="color: #555; font-size: 10px;">
+                    ${{ sale.total|intcomma }}
                 </td>
-                <td class="text-right">
-                    {% if event.type == 'SALE' %}
-                    <span class="amount-compra">+${{ event.amount|intcomma }}</span>
-                    {% else %}
-                    <span class="amount-abono">-${{ event.amount|intcomma }}</span>
-                    {% endif %}
+                <td class="text-right" style="color: #388e3c; font-weight:bold;">
+                    ${{ sale.amount_paid|intcomma }}
+                </td>
+                <td class="text-right" style="color: #d32f2f; font-weight:bold;">
+                    ${{ sale.pending_balance|intcomma }}
                 </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="4" class="text-center">Sin movimientos registrados.</td>
+                <td colspan="5" class="text-center">Cuenta estricatamente al día. Sin deuda activa.</td>
             </tr>
             {% endfor %}
         </tbody>

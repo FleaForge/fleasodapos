@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+{% load humanize %}
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recibo de Caja - {{ client.name }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+
+<body class="bg-gray-100 min-h-screen p-4 md:p-8">
+    <div class="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-xl shadow-xl">
+        <div class="flex items-center gap-4 mb-6 border-b pb-4">
+            <a href="{% url 'client_statement' client.id %}" class="text-gray-500 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 p-2 rounded-full transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+            </a>
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800">Generar Recibo de Caja</h1>
+                <p class="text-gray-500">Cliente: <span class="font-bold text-gray-700">{{ client.name }}</span></p>
+            </div>
+        </div>
+
+        <form action="{% url 'add_payment' client.id %}" method="POST" 
+            x-data="paymentForm(
+                [
+                    {% for sale in pending_sales %}
+                    { id: {{ sale.id }}, total: {{ sale.total }}, pending: {{ sale.pending_balance }}, paid: {{ sale.amount_paid }}, ref: 'Factura #{{ sale.id }}', date: '{{ sale.date|date:"d/m/Y" }}', applyAmount: 0 },
+                    {% endfor %}
+                ]
+            )">
+            {% csrf_token %}
+            
+            {% for sale in pending_sales %}
+            <input type="hidden" name="allocation_{{ sale.id }}" :value="invoices.find(i => i.id === {{ sale.id }}).applyAmount">
+            {% endfor %}
+            
+            <div class="bg-green-50 border border-green-200 rounded-xl p-6 mb-8 shadow-sm">
+                <label class="block text-sm font-bold text-green-800 uppercase tracking-wider mb-2">Monto Total Recibido ($)</label>
+                <div class="relative">
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-2xl text-green-700 font-bold">$</span>
+                    <input 
+                        type="number" 
+                        name="amount" 
+                        x-model.number="totalAmount"
+                        @input="distributeAmount()"
+                        class="w-full pl-10 p-4 border-2 border-green-300 rounded-lg text-3xl font-bold text-green-800 focus:outline-none focus:border-green-500 transition"
+                        placeholder="0"
+                        required
+                    />
+                </div>
+                
+                <div class="mt-4">
+                    <label class="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Nota / Referencia (Opcional)</label>
+                    <input type="text" name="note" class="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:border-green-400" placeholder="Ej: Transferencia Bancolombia, Efectivo" />
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <div class="flex justify-between items-end mb-4">
+                    <h2 class="text-lg font-bold text-gray-800">Facturas Pendientes</h2>
+                    <span class="text-sm font-bold" :class="unallocated > 0 ? 'text-yellow-600' : 'text-gray-500'">
+                        Saldo sobrante (A Favor): $<span x-text="unallocated.toLocaleString()"></span>
+                    </span>
+                </div>
+
+                {% if pending_sales %}
+                <div class="space-y-3">
+                    <template x-for="(invoice, index) in invoices" :key="invoice.id">
+                        <div class="border border-gray-200 rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition"
+                            :class="invoice.applyAmount > 0 ? 'bg-blue-50 border-blue-200' : 'bg-white hover:bg-gray-50'">
+                            
+                            <div class="flex-1">
+                                <div class="flex justify-between md:justify-start items-center gap-4">
+                                    <span class="font-bold text-gray-800" x-text="invoice.ref"></span>
+                                    <span class="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded" x-text="invoice.date"></span>
+                                </div>
+                                <div class="text-sm text-gray-500 mt-1 flex gap-4">
+                                    <span>Total: $<span x-text="invoice.total.toLocaleString()"></span></span>
+                                    <span>Pendiente: <strong class="text-red-500">$<span x-text="invoice.pending.toLocaleString()"></span></strong></span>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm text-gray-500">Abonar:</span>
+                                <div class="relative w-32">
+                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span>
+                                    <input 
+                                        type="number" 
+                                        :name="'allocation_' + invoice.id" 
+                                        x-model.number="invoice.applyAmount"
+                                        @input="recalculateFromInputs()"
+                                        class="w-full pl-7 p-2 border rounded font-bold text-right focus:outline-none"
+                                        :class="invoice.applyAmount > 0 ? 'border-blue-400 bg-white text-blue-700' : 'border-gray-300 bg-gray-50 text-gray-700'"
+                                        min="0"
+                                        :max="invoice.pending"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                {% else %}
+                <div class="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                    <span class="text-4xl">🎉</span>
+                    <p class="text-gray-500 font-bold mt-2">No hay facturas pendientes.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="flex justify-end gap-4 mt-8 pt-6 border-t">
+                <a href="{% url 'client_statement' client.id %}" class="px-6 py-3 font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition">Cancelar</a>
+                <button type="submit" class="px-8 py-3 font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-lg hover:shadow-xl transition">Guardar Recibo</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('paymentForm', (initialInvoices) => ({
+                totalAmount: '',
+                invoices: initialInvoices, // assumed to be chronologically ordered from Django 
+                
+                get unallocated() {
+                    let totalApplied = this.invoices.reduce((sum, inv) => sum + (Number(inv.applyAmount) || 0), 0);
+                    let result = (Number(this.totalAmount) || 0) - totalApplied;
+                    return result > 0 ? result : 0;
+                },
+
+                distributeAmount() {
+                    let remaining = Number(this.totalAmount) || 0;
+                    
+                    this.invoices.forEach(invoice => {
+                        if (remaining > 0) {
+                            if (remaining >= invoice.pending) {
+                                invoice.applyAmount = invoice.pending;
+                                remaining -= invoice.pending;
+                            } else {
+                                invoice.applyAmount = remaining;
+                                remaining = 0;
+                            }
+                        } else {
+                            invoice.applyAmount = 0;
+                        }
+                    });
+                },
+
+                recalculateFromInputs() {
+                    // Si el usuario manipula los inputs individualmente, 
+                    // actualizamos el totalAmount visual si es menor, o dejamos el sobrante si es mayor.
+                    let totalApplied = this.invoices.reduce((sum, inv) => sum + (Number(inv.applyAmount) || 0), 0);
+                    // Opcionalmente podemos forzar el total a igualar al aplicado si queremos,
+                    // pero es mejor permitir "unallocated" (Abono general o anticipo)
+                    // if (totalApplied > Number(this.totalAmount)) {
+                    //    this.totalAmount = totalApplied;
+                    // }
+                }
+            }));
+        });
+    </script>
+</body>
+</html>

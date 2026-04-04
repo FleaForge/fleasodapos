@@ -30,8 +30,8 @@ class Client(models.Model):
 
     @property
     def balance(self):
-        credit_sales = self.sale_set.filter(payment_method='CREDIT').aggregate(models.Sum('total'))['total__sum'] or 0
-        payments = self.payments.aggregate(models.Sum('amount'))['amount__sum'] or 0
+        credit_sales = self.sale_set.filter(payment_method='CREDIT', is_annulled=False).aggregate(models.Sum('total'))['total__sum'] or 0
+        payments = self.payments.filter(is_annulled=False).aggregate(models.Sum('amount'))['amount__sum'] or 0
         return credit_sales - payments
 
 class Sale(models.Model):
@@ -44,7 +44,18 @@ class Sale(models.Model):
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHODS, default='CASH')
     total = models.IntegerField(default=0)
     is_paid = models.BooleanField(default=True) # Cash is paid immediately
+    is_annulled = models.BooleanField(default=False) # Annulled invoice
     note = models.TextField(blank=True, null=True)
+
+    @property
+    def amount_paid(self):
+        return sum(alloc.amount for alloc in self.allocations.filter(payment__is_annulled=False))
+
+    @property
+    def pending_balance(self):
+        if self.payment_method == 'CASH' or self.is_annulled:
+            return 0
+        return max(0, self.total - self.amount_paid)
 
     def __str__(self):
         return f"Factura #{self.id} - {self.client.name}"
@@ -65,6 +76,15 @@ class Payment(models.Model):
     amount = models.IntegerField(default=0)
     date = models.DateTimeField(auto_now_add=True)
     note = models.TextField(blank=True)
+    is_annulled = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Pago {self.amount} - {self.client.name}"
+
+class PaymentAllocation(models.Model):
+    payment = models.ForeignKey(Payment, related_name='allocations', on_delete=models.CASCADE)
+    sale = models.ForeignKey(Sale, related_name='allocations', on_delete=models.CASCADE)
+    amount = models.IntegerField(default=0)
+    
+    def __str__(self):
+        return f"Abono ${self.amount} a Factura #{self.sale.id}"

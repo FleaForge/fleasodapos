@@ -7,6 +7,7 @@
     <title>Estado de Cuenta - {{ client.name }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="//unpkg.com/alpinejs" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <style>
       @media print {
         .no-print {
@@ -34,6 +35,7 @@
 
   <body class="bg-gray-100 min-h-screen p-4 md:p-8">
     <div
+      id="statement-container"
       class="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-xl print-container"
     >
       <!-- Header -->
@@ -42,17 +44,23 @@
           <h1 class="text-3xl font-bold text-gray-800">Estado de Cuenta</h1>
           <p class="text-gray-500">Fecha: {{ now|date:"d/m/Y H:i" }}</p>
 
-          {% if not is_public %}
-          <div class="mt-4 no-print space-x-2">
+          <div class="mt-4 no-print flex flex-wrap gap-2">
+            {% if not is_public %}
             <!-- Add Payment Button trigger -->
-            <button
-              onclick="document.getElementById('paymentModal').classList.remove('hidden')"
+            <a
+              href="{% url 'add_payment' client.id %}"
               class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-bold text-sm shadow inline-flex items-center gap-2"
             >
               <span>$</span> Registrar Pago
+            </a>
+            {% endif %}
+            <button
+              onclick="downloadImage()"
+              class="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-black transition font-bold text-sm shadow inline-flex items-center gap-2"
+            >
+              <span>📲</span> Generar Imagen
             </button>
           </div>
-          {% endif %}
         </div>
         <div class="text-right">
           <h2 class="text-xl font-bold text-gray-700">{{ client.name }}</h2>
@@ -70,125 +78,124 @@
         </div>
       </div>
 
-      <!-- Timeline Table -->
-      <div class="overflow-x-auto">
+      <!-- Pending Sales Table -->
+      <div class="overflow-x-auto mt-4">
         <table class="w-full text-left text-sm">
           <thead class="bg-gray-50 border-b-2 border-gray-300">
             <tr class="text-gray-600 uppercase tracking-wider text-xs">
-              <th class="py-3 px-3 w-24">Fecha</th>
-              <th class="py-3 px-3">Movimiento</th>
-              <th class="py-3 px-3 w-32">Comentario</th>
-              <th class="py-3 px-3 text-right w-32">Monto</th>
+              <th class="py-3 px-3 w-28">Emisión</th>
+              <th class="py-3 px-3">Comprobante</th>
+              <th class="py-3 px-3 text-right">Valor Original</th>
+              <th class="py-3 px-3 text-right">Abonado</th>
+              <th class="py-3 px-3 text-right text-red-600 font-bold w-32">Falta</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
-            {% for event in timeline %}
-            <tr class="hover:bg-gray-50 transition">
-              <td
-                class="py-3 px-3 whitespace-nowrap align-top text-gray-500 text-xs"
-              >
-                {{ event.date|date:"d/m/Y" }}<br />
-                <span class="text-gray-400">{{ event.date|date:"H:i" }}</span>
+          <tbody class="divide-y divide-gray-100 bg-white">
+            {% for sale in pending_sales %}
+            <tr class="hover:bg-gray-50 transition" x-data="{ expanded: false }">
+              <td class="py-3 px-3 align-top text-gray-500 text-xs">
+                {{ sale.date|date:"d/m/Y" }}<br/>
+                <span class="text-gray-400">{{ sale.date|date:"H:i" }}</span>
               </td>
-
-              <td class="py-3 px-3 align-top" x-data="{ expanded: false }">
-                <!-- Type Badge + Reference -->
-                <div class="flex items-center gap-2 mb-1">
-                  {% if event.type == 'SALE' %}
-                  <span
-                    class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold"
-                    >COMPRA</span
-                  >
-                  {% else %}
-                  <span
-                    class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold"
-                    >ABONO</span
-                  >
-                  {% endif %}
-                  <div class="font-bold text-gray-700">{{ event.ref }}</div>
-
-                  {% if event.type == 'SALE' %}
-                  <button
-                    @click="expanded = !expanded"
-                    class="text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 px-2 py-1 rounded transition flex items-center gap-1 no-print"
-                  >
-                    <span
-                      x-text="expanded ? 'Ocultar' : 'Ver items ({{ event.items|length }})'"
-                    ></span>
-                    <span x-text="expanded ? '▲' : '▼'"></span>
-                  </button>
-                  {% endif %}
-                </div>
-
-                {% if event.type == 'SALE' %}
-                <div
-                  x-show="expanded"
-                  style="display: none"
-                  class="overflow-hidden rounded border border-gray-200 mt-2 transition-all duration-300"
-                >
-                  <table class="w-full text-xs">
-                    <thead class="bg-gray-50 text-gray-500 font-medium">
-                      <tr>
-                        <th class="px-2 py-1 text-center w-10">Cant.</th>
-                        <th class="px-2 py-1 text-left">Descripción</th>
-                        <th class="px-2 py-1 text-right w-20">Precio</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-50">
-                      {% for item in event.items %}
-                      <tr>
-                        <td
-                          class="px-2 py-1 text-center font-bold text-gray-700"
-                        >
-                          {{ item.quantity }}
-                        </td>
-                        <td class="px-2 py-1 text-gray-700">
-                          {{ item.product.name }}
-                        </td>
-                        <td class="px-2 py-1 text-right text-gray-500">
-                          ${{ item.price|intcomma }}
-                        </td>
-                      </tr>
+              <td class="py-3 px-3 align-top">
+                <div class="font-bold text-gray-700">Factura #{{ sale.id }}</div>
+                {% if sale.amount_paid > 0 %}
+                <button @click="expanded = !expanded" class="text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 px-2 py-1 rounded transition mt-1 flex items-center gap-1 no-print">
+                  <span x-text="expanded ? 'Ocultar Abonos' : 'Ver Detalle Abonos'"></span>
+                </button>
+                {% endif %}
+                
+                <div x-show="expanded" style="display: none" class="mt-2 text-xs border border-gray-100 rounded bg-gray-50 p-2">
+                   <ul>
+                      {% for alloc in sale.allocations.all %}
+                        {% if not alloc.payment.is_annulled %}
+                        <li class="flex justify-between items-center text-gray-500 border-b border-gray-200 last:border-b-0 py-1">
+                          <div class="flex items-center gap-2">
+                             <span>Pago {{ alloc.payment.date|date:"d/m/y" }}</span>
+                             {% if not is_public %}
+                             <form action="{% url 'annul_payment' alloc.payment.id %}" method="POST" class="inline no-print" onsubmit="return confirm('¿Está seguro de anular este abono? Se reversará este monto de la factura.');">
+                                 {% csrf_token %}
+                                 <button type="submit" class="text-[10px] text-red-500 hover:text-red-700 font-bold bg-red-50 hover:bg-red-100 px-1 py-0.5 rounded transition border border-red-100">
+                                   ✖ Anular
+                                 </button>
+                             </form>
+                             {% endif %}
+                          </div>
+                          <span class="font-bold text-green-600">+${{ alloc.amount|intcomma }}</span>
+                        </li>
+                        {% endif %}
                       {% endfor %}
-                    </tbody>
-                  </table>
+                   </ul>
                 </div>
-                {% endif %}
               </td>
-
-              <td class="py-3 px-3 align-top text-xs text-gray-600 italic">
-                {{ event.object.note|default:""|linebreaksbr }}
+              <td class="py-3 px-3 align-top text-right text-gray-400 font-medium">
+                ${{ sale.total|intcomma }}
               </td>
-
-              <td class="py-3 px-3 text-right align-top">
-                {% if event.type == 'SALE' %}
-                <span class="font-bold text-red-600 text-lg"
-                  >+${{ event.amount|intcomma }}</span
-                >
-                {% else %}
-                <span class="font-bold text-green-700 text-lg"
-                  >-${{ event.amount|intcomma }}</span
-                >
-                {% endif %}
-                <div class="text-xs text-gray-400 mt-1">
-                  Saldo: ${{ event.balance|intcomma }}
-                </div>
+              <td class="py-3 px-3 align-top text-right text-green-600 font-bold">
+                ${{ sale.amount_paid|intcomma }}
+              </td>
+              <td class="py-3 px-3 align-top text-right font-bold text-red-500 text-lg">
+                ${{ sale.pending_balance|intcomma }}
               </td>
             </tr>
             {% empty %}
             <tr>
-              <td colspan="4" class="py-12 text-center text-gray-400">
+              <td colspan="5" class="py-12 text-center text-gray-400">
                 <div class="flex flex-col items-center justify-center">
                   <span class="text-4xl mb-2">🎉</span>
                   <p class="font-bold text-gray-600">Cuenta al día</p>
                   <p class="text-xs mt-1">No hay deuda activa pendiente.</p>
                 </div>
               </td>
-            </tr>
+             </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
+      
+      {% if not is_public and recent_payments %}
+      <!-- Recents Payments Section (Admin Only) -->
+      <div class="mt-4 no-print" x-data="{ showAbonos: false }">
+        <button
+          @click="showAbonos = !showAbonos"
+          class="flex items-center gap-2 text-green-700 font-bold hover:text-green-800 transition w-full justify-between bg-green-50/50 p-3 rounded-lg border border-green-100"
+        >
+          <span class="flex items-center gap-2 uppercase text-xs tracking-wider">
+            💸 Ver Historial Reciente de Abonos (Para Anulaciones)
+          </span>
+          <svg :class="showAbonos ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+        </button>
+
+        <div x-show="showAbonos" style="display: none" class="mt-2 transition-all p-3 bg-white border border-green-100 rounded-lg shadow-sm">
+          <div class="grid gap-2">
+            {% for payment in recent_payments %}
+            <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0 {% if payment.is_annulled %}opacity-50 grayscale{% endif %}">
+                <div>
+                    <span class="text-[11px] text-gray-500 block">{{ payment.date|date:"d/m/Y H:i" }}</span>
+                    <span class="font-bold text-gray-700 text-sm block">Abono General Registrado</span>
+                    <span class="text-[11px] text-gray-400 block">{{ payment.note|default:"Ingreso a caja" }}</span>
+                </div>
+                <div class="text-right flex items-center gap-3">
+                    <span class="font-bold text-green-600">+${{ payment.amount|intcomma }}</span>
+                    {% if not payment.is_annulled %}
+                    <form action="{% url 'annul_payment' payment.id %}" method="POST" class="inline" onsubmit="return confirm('¿Está seguro de anular este abono? El dinero devuelto hará que las facturas queden pendientes nuevamente.');">
+                        {% csrf_token %}
+                        <button type="submit" class="text-[10px] bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded transition font-bold shadow-sm uppercase tracking-wider">
+                            ✖ Anular
+                        </button>
+                    </form>
+                    {% else %}
+                        <span class="text-[10px] bg-gray-200 text-gray-500 px-2 py-1 rounded font-bold uppercase tracking-wider">Anulado</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+
 
       <!-- History Section (Admin Only) -->
       {% if history_timeline %}
@@ -248,7 +255,7 @@
                   <td class="py-2 px-3 align-top text-gray-500">
                     <span class="font-bold block">{{ event.ref }}</span>
                     <span class="text-xs block">
-                      {% if event.type == 'SALE' %}COMPRA{% else %}ABONO{% endif %}
+                      {% if event.type == 'SALE' %}COMPRA{% elif event.type == 'ANNULMENT' %}ANULACIÓN{% else %}ABONO{% endif %}
                     </span>
                   </td>
                   <td class="py-2 px-3 align-top text-xs text-gray-400 italic">
@@ -256,7 +263,7 @@
                   </td>
                   <td class="py-2 px-3 text-right align-top text-gray-500">
                     {% if event.type == 'SALE' %}
-                    <span class="">+${{ event.amount|intcomma }}</span>
+                    <span class="{% if event.is_annulled %}line-through text-gray-300{% endif %}">+${{ event.amount|intcomma }}</span>
                     {% else %}
                     <span class="">-${{ event.amount|intcomma }}</span>
                     {% endif %}
@@ -287,56 +294,7 @@
       </div>
     </div>
 
-    <!-- Payment Modal -->
-    <div
-      id="paymentModal"
-      class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 no-print"
-    >
-      <div class="bg-white p-6 rounded-xl shadow-xl w-full max-w-sm mx-4">
-        <h3 class="text-xl font-bold mb-4 text-green-600">Registrar Pago</h3>
-        <form action="{% url 'add_payment' client.id %}" method="POST">
-          {% csrf_token %}
-          <div class="space-y-4">
-            <div>
-              <label class="block text-sm text-gray-600">Monto</label>
-              <input
-                type="number"
-                step="1"
-                name="amount"
-                class="w-full p-2 border rounded-lg text-2xl font-bold"
-                required
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <label class="block text-sm text-gray-600"
-                >Nota / Referencia</label
-              >
-              <textarea
-                name="note"
-                class="w-full p-2 border rounded-lg"
-                rows="2"
-              ></textarea>
-            </div>
-          </div>
-          <div class="mt-6 flex justify-end gap-2">
-            <button
-              type="button"
-              onclick="document.getElementById('paymentModal').classList.add('hidden')"
-              class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg"
-            >
-              cancelar
-            </button>
-            <button
-              type="submit"
-              class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-            >
-              Guardar Pago
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <!-- Payment Modal Removed (Moved to separate page) -->
 
     <!-- Floating Controls -->
     {% if not is_public %}
@@ -386,14 +344,31 @@
     </div>
     {% else %}
     <!-- Simplified controls for public -->
-    <div class="fixed bottom-8 right-8 space-x-4 no-print flex">
+    <div class="fixed bottom-8 right-8 space-x-2 md:space-x-4 no-print flex flex-col md:flex-row gap-2 md:gap-0 items-end">
+      
+    <!-- Removed bottom image button -->
+
       <button
         onclick="window.close()"
         class="bg-gray-500 text-white px-6 py-3 rounded-full shadow-lg hover:bg-gray-600 font-bold"
       >
-        Cerrar Pestaña
+        Cerrar
       </button>
     </div>
     {% endif %}
+
+    <script>
+      function downloadImage() {
+        const container = document.getElementById('statement-container');
+        // A little styling adjustment for canvas capturing correctly without hover classes messing it up
+        html2canvas(container, { scale: 2, useCORS: true }).then(canvas => {
+          // Create an invisible link to download
+          let link = document.createElement('a');
+          link.download = `Estado_Cuenta_{{ client.name }}.png`;
+          link.href = canvas.toDataURL("image/png");
+          link.click();
+        });
+      }
+    </script>
   </body>
 </html>

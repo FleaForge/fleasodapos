@@ -47,6 +47,7 @@ RUN mkdir -p /app/data /app/db
 
 # Collect static files
 RUN python manage.py collectstatic --noinput
+RUN python manage.py migrate
 
 # Expose port
 EXPOSE 7001
