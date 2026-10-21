@@ -4,128 +4,37 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recibo de Caja - {{ client.name }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Recibo de Caja - {{ client.name }} - FleasoDaPos</title>
+    
+    <!-- PWA & Apple iOS Settings -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="FleasoDaPos">
+    <link rel="apple-touch-icon" href="/static/logo.png">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <meta name="theme-color" content="#5592a3">
+
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-</head>
 
-<body class="bg-gray-100 min-h-screen p-4 md:p-8">
-    <div class="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-xl shadow-xl">
-        <div class="flex items-center gap-4 mb-6 border-b pb-4">
-            <a href="{% url 'client_statement' client.id %}" class="text-gray-500 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 p-2 rounded-full transition">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-            </a>
-            <div>
-                <h1 class="text-2xl md:text-3xl font-bold text-gray-800">Generar Recibo de Caja</h1>
-                <p class="text-gray-500">Cliente: <span class="font-bold text-gray-700">{{ client.name }}</span></p>
-            </div>
-        </div>
-
-        <form action="{% url 'add_payment' client.id %}" method="POST" 
-            x-data="paymentForm(
-                [
-                    {% for sale in pending_sales %}
-                    { id: {{ sale.id }}, total: {{ sale.total }}, pending: {{ sale.pending_balance }}, paid: {{ sale.amount_paid }}, ref: 'Factura #{{ sale.id }}', date: '{{ sale.date|date:"d/m/Y" }}', applyAmount: 0 },
-                    {% endfor %}
-                ]
-            )">
-            {% csrf_token %}
-            
-            {% for sale in pending_sales %}
-            <input type="hidden" name="allocation_{{ sale.id }}" :value="invoices.find(i => i.id === {{ sale.id }}).applyAmount">
-            {% endfor %}
-            
-            <div class="bg-green-50 border border-green-200 rounded-xl p-6 mb-8 shadow-sm">
-                <label class="block text-sm font-bold text-green-800 uppercase tracking-wider mb-2">Monto Total Recibido ($)</label>
-                <div class="relative">
-                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-2xl text-green-700 font-bold">$</span>
-                    <input 
-                        type="number" 
-                        name="amount" 
-                        x-model.number="totalAmount"
-                        @input="distributeAmount()"
-                        class="w-full pl-10 p-4 border-2 border-green-300 rounded-lg text-3xl font-bold text-green-800 focus:outline-none focus:border-green-500 transition"
-                        placeholder="0"
-                        required
-                    />
-                </div>
-                
-                <div class="mt-4">
-                    <label class="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Nota / Referencia (Opcional)</label>
-                    <input type="text" name="note" class="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:border-green-400" placeholder="Ej: Transferencia Bancolombia, Efectivo" />
-                </div>
-            </div>
-
-            <div class="mb-6">
-                <div class="flex justify-between items-end mb-4">
-                    <h2 class="text-lg font-bold text-gray-800">Facturas Pendientes</h2>
-                    <span class="text-sm font-bold" :class="unallocated > 0 ? 'text-yellow-600' : 'text-gray-500'">
-                        Saldo sobrante (A Favor): $<span x-text="unallocated.toLocaleString()"></span>
-                    </span>
-                </div>
-
-                {% if pending_sales %}
-                <div class="space-y-3">
-                    <template x-for="(invoice, index) in invoices" :key="invoice.id">
-                        <div class="border border-gray-200 rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition"
-                            :class="invoice.applyAmount > 0 ? 'bg-blue-50 border-blue-200' : 'bg-white hover:bg-gray-50'">
-                            
-                            <div class="flex-1">
-                                <div class="flex justify-between md:justify-start items-center gap-4">
-                                    <span class="font-bold text-gray-800" x-text="invoice.ref"></span>
-                                    <span class="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded" x-text="invoice.date"></span>
-                                </div>
-                                <div class="text-sm text-gray-500 mt-1 flex gap-4">
-                                    <span>Total: $<span x-text="invoice.total.toLocaleString()"></span></span>
-                                    <span>Pendiente: <strong class="text-red-500">$<span x-text="invoice.pending.toLocaleString()"></span></strong></span>
-                                </div>
-                            </div>
-                            
-                            <div class="flex items-center gap-2">
-                                <span class="text-sm text-gray-500">Abonar:</span>
-                                <div class="relative w-32">
-                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span>
-                                    <input 
-                                        type="number" 
-                                        :name="'allocation_' + invoice.id" 
-                                        x-model.number="invoice.applyAmount"
-                                        @input="recalculateFromInputs()"
-                                        class="w-full pl-7 p-2 border rounded font-bold text-right focus:outline-none"
-                                        :class="invoice.applyAmount > 0 ? 'border-blue-400 bg-white text-blue-700' : 'border-gray-300 bg-gray-50 text-gray-700'"
-                                        min="0"
-                                        :max="invoice.pending"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-                {% else %}
-                <div class="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                    <span class="text-4xl">🎉</span>
-                    <p class="text-gray-500 font-bold mt-2">No hay facturas pendientes.</p>
-                </div>
-                {% endif %}
-            </div>
-
-            <div class="flex justify-end gap-4 mt-8 pt-6 border-t">
-                <a href="{% url 'client_statement' client.id %}" class="px-6 py-3 font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition">Cancelar</a>
-                <button type="submit" class="px-8 py-3 font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-lg hover:shadow-xl transition">Guardar Recibo</button>
-            </div>
-        </form>
-    </div>
-
+    <!-- Global Component Function (Available BEFORE Alpine loads) -->
     <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('paymentForm', (initialInvoices) => ({
+        function paymentForm(currentDebt, initialInvoices) {
+            return {
+                currentDebt: Number(currentDebt) || 0,
                 totalAmount: '',
-                invoices: initialInvoices, // assumed to be chronologically ordered from Django 
+                invoices: initialInvoices || [],
                 
-                get unallocated() {
-                    let totalApplied = this.invoices.reduce((sum, inv) => sum + (Number(inv.applyAmount) || 0), 0);
-                    let result = (Number(this.totalAmount) || 0) - totalApplied;
-                    return result > 0 ? result : 0;
+                payFullDebt() {
+                    this.totalAmount = this.currentDebt;
+                    this.distributeAmount();
+                    const input = document.getElementById('payment-amount-input');
+                    if (input) {
+                        input.value = this.currentDebt;
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.focus();
+                    }
                 },
 
                 distributeAmount() {
@@ -144,20 +53,237 @@
                             invoice.applyAmount = 0;
                         }
                     });
-                },
-
-                recalculateFromInputs() {
-                    // Si el usuario manipula los inputs individualmente, 
-                    // actualizamos el totalAmount visual si es menor, o dejamos el sobrante si es mayor.
-                    let totalApplied = this.invoices.reduce((sum, inv) => sum + (Number(inv.applyAmount) || 0), 0);
-                    // Opcionalmente podemos forzar el total a igualar al aplicado si queremos,
-                    // pero es mejor permitir "unallocated" (Abono general o anticipo)
-                    // if (totalApplied > Number(this.totalAmount)) {
-                    //    this.totalAmount = totalApplied;
-                    // }
                 }
-            }));
-        });
+            };
+        }
+
+        function handlePayFullDebtDirect(debt) {
+            const input = document.getElementById('payment-amount-input');
+            if (input) {
+                input.value = debt;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                input.focus();
+            }
+        }
     </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+
+<body class="bg-gray-100 min-h-screen p-4 md:p-8 flex flex-col items-center justify-start"
+      style="padding-top: max(1rem, env(safe-area-inset-top, 0px)); padding-bottom: max(2rem, env(safe-area-inset-bottom, 0px));">
+    
+    <!-- Top Return Bar -->
+    <div class="max-w-3xl w-full mb-3 flex justify-between items-center">
+        <a href="{% url 'client_statement' client.id %}"
+           class="inline-flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-3.5 py-2 rounded-xl border border-gray-300 font-semibold text-sm shadow-sm transition active:scale-95">
+            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+            <span>Volver al Estado de Cuenta</span>
+        </a>
+    </div>
+
+    <div class="max-w-3xl w-full bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-gray-200"
+         x-data="paymentForm(
+            {{ current_debt }},
+            [
+                {% for sale in pending_sales %}
+                { 
+                    id: {{ sale.id }}, 
+                    total: {{ sale.total }}, 
+                    pending: {{ sale.pending_balance }}, 
+                    paid: {{ sale.amount_paid }}, 
+                    ref: '{% if sale.is_adjustment %}Ajuste #{{ sale.id }}{% else %}Factura #{{ sale.id }}{% endif %}', 
+                    isAdjustment: {% if sale.is_adjustment %}true{% else %}false{% endif %},
+                    note: '{{ sale.note|default:""|escapejs }}',
+                    date: '{{ sale.date|date:"d/m/Y H:i" }}', 
+                    applyAmount: 0 
+                },
+                {% endfor %}
+            ]
+         )">
+        
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b pb-5">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-extrabold text-gray-800">Registrar Recibo de Caja</h1>
+                <p class="text-gray-500 text-sm mt-0.5">Cliente: <strong class="text-gray-800">{{ client.name }}</strong> (Tel: {{ client.phone }})</p>
+            </div>
+            <div class="text-left sm:text-right bg-gray-50 border border-gray-200 rounded-xl p-3 sm:px-4">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-gray-400 block">Deuda Pendiente Actual</span>
+                <span class="text-2xl font-black {% if current_debt > 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
+                    ${{ current_debt|intcomma }}
+                </span>
+            </div>
+        </div>
+
+        {% if current_debt > 0 %}
+        <!-- Quick Pay Total Button -->
+        <div class="mb-6 bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shadow-sm flex-shrink-0">
+                    ⚡
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-emerald-900">¿El cliente pagará la totalidad de su deuda?</h3>
+                    <p class="text-xs text-emerald-700">Aplica el valor total y cancela todas las facturas pendientes de lo más antiguo a lo nuevo.</p>
+                </div>
+            </div>
+            <button 
+                type="button" 
+                id="btn-cancelar-toda-deuda"
+                @click="payFullDebt()"
+                onclick="handlePayFullDebtDirect({{ current_debt }})"
+                class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold py-2.5 px-4 rounded-xl text-xs md:text-sm shadow transition flex items-center justify-center gap-2 cursor-pointer flex-shrink-0">
+                <span>Cancelar Toda la Deuda (${{ current_debt|intcomma }})</span>
+            </button>
+        </div>
+        {% else %}
+        <div class="mb-6 bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3 text-emerald-800">
+            <span class="text-2xl">🎉</span>
+            <div>
+                <strong class="text-sm block">El cliente se encuentra al día (Paz y Salvo)</strong>
+                <p class="text-xs text-emerald-700">Cualquier pago que registres quedará guardado como anticipo o saldo a favor.</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <form action="{% url 'add_payment' client.id %}" method="POST">
+            {% csrf_token %}
+            
+            <div class="bg-gray-50 border border-gray-200 rounded-2xl p-6 mb-6 shadow-sm">
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Monto del Pago / Abono Recibido ($)</label>
+                <div class="relative">
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-2xl text-gray-500 font-black">$</span>
+                    <input 
+                        type="number" 
+                        name="amount" 
+                        id="payment-amount-input"
+                        x-model.number="totalAmount"
+                        @input="distributeAmount()"
+                        class="w-full pl-10 p-4 border-2 border-emerald-400 bg-white rounded-xl text-3xl font-extrabold text-gray-900 focus:outline-none focus:ring-4 focus:ring-emerald-100 transition shadow-inner"
+                        placeholder="0"
+                        min="1"
+                        required
+                    />
+                </div>
+
+                <!-- Live Projection Feedback -->
+                <div class="mt-4 transition-all">
+                    <template x-if="totalAmount > 0 && currentDebt > 0 && totalAmount >= currentDebt">
+                        <div class="p-3 bg-emerald-100 border border-emerald-300 rounded-xl text-emerald-900 text-xs md:text-sm font-semibold flex items-center gap-2">
+                            <span class="text-lg">✅</span>
+                            <span>¡Excelente! Con este pago de <strong>$<span x-text="Number(totalAmount).toLocaleString('es-CO')"></span></strong> la cuenta del cliente quedará totalmente en <strong>PAZ Y SALVO (Saldo $0)</strong>.</span>
+                            <span x-show="totalAmount > currentDebt" class="block ml-auto text-xs bg-emerald-200 text-emerald-900 px-2 py-1 rounded">
+                                Sobrante a favor: +$<span x-text="(totalAmount - currentDebt).toLocaleString('es-CO')"></span>
+                            </span>
+                        </div>
+                    </template>
+                    <template x-if="totalAmount > 0 && currentDebt > 0 && totalAmount < currentDebt">
+                        <div class="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 text-xs md:text-sm font-semibold flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="text-lg">ℹ️</span>
+                                <span>Abono parcial registrado. Se liquidarán primero las facturas más antiguas.</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-[11px] text-blue-600 block">Nuevo saldo restante:</span>
+                                <strong class="text-red-600 text-base font-bold">$<span x-text="(currentDebt - totalAmount).toLocaleString('es-CO')"></span></strong>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                
+                <div class="mt-4">
+                    <label class="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">Concepto o Nota (Opcional)</label>
+                    <input 
+                        type="text" 
+                        name="note" 
+                        class="w-full p-3 border border-gray-300 bg-white rounded-xl text-gray-700 text-sm focus:outline-none focus:border-emerald-500 shadow-sm" 
+                        placeholder="Ej: Pago en efectivo, Transferencia Bancolombia, Nequi..." 
+                    />
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-sm font-extrabold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                        <span>📋 Facturas en Cola de Cobro (Orden de lo más antiguo a lo nuevo)</span>
+                    </h2>
+                    <span class="text-xs text-gray-500 font-medium">Aplicación estricta FIFO</span>
+                </div>
+
+                {% if pending_sales %}
+                <div class="space-y-3">
+                    <template x-for="(invoice, index) in invoices" :key="invoice.id">
+                        <div class="border rounded-xl p-4 transition-all"
+                            :class="{
+                                'bg-emerald-50/70 border-emerald-300 ring-1 ring-emerald-200': invoice.applyAmount >= invoice.pending,
+                                'bg-blue-50/70 border-blue-300 ring-1 ring-blue-200': invoice.applyAmount > 0 && invoice.applyAmount < invoice.pending,
+                                'bg-white border-gray-200': invoice.applyAmount === 0
+                            }">
+                            
+                            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                <div>
+                                    <div class="flex items-center gap-2.5 flex-wrap">
+                                        <span class="font-extrabold text-gray-800 text-base" x-text="invoice.ref"></span>
+                                        <span class="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium" x-text="invoice.date"></span>
+                                        
+                                        <!-- Status Badge -->
+                                        <span x-show="invoice.applyAmount >= invoice.pending" 
+                                              class="text-[11px] font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-full shadow-sm">
+                                            ✓ Quedará Saldada
+                                        </span>
+                                        <span x-show="invoice.applyAmount > 0 && invoice.applyAmount < invoice.pending" 
+                                              class="text-[11px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded-full shadow-sm">
+                                            Abono Parcial
+                                        </span>
+                                        <span x-show="invoice.applyAmount === 0" 
+                                              class="text-[11px] font-medium bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                                            Pendiente
+                                        </span>
+                                    </div>
+
+                                    <template x-if="invoice.note">
+                                        <p class="text-xs text-gray-500 font-medium mt-1 bg-white/70 px-2 py-1 rounded border border-gray-100 inline-block" x-text="invoice.note"></p>
+                                    </template>
+
+                                    <div class="text-xs text-gray-600 mt-2 flex flex-wrap gap-4">
+                                        <span>Valor Original: <strong>$<span x-text="invoice.total.toLocaleString('es-CO')"></span></strong></span>
+                                        <span>Abonado Previo: <strong>$<span x-text="invoice.paid.toLocaleString('es-CO')"></span></strong></span>
+                                        <span>Falta por pagar: <strong class="text-red-600">$<span x-text="invoice.pending.toLocaleString('es-CO')"></span></strong></span>
+                                    </div>
+                                </div>
+                                
+                                <div class="text-right border-t md:border-t-0 pt-2 md:pt-0">
+                                    <span class="text-[11px] text-gray-500 uppercase font-bold block">Se le aplicará:</span>
+                                    <span class="text-lg font-black" :class="invoice.applyAmount > 0 ? 'text-emerald-700' : 'text-gray-400'">
+                                        +$<span x-text="invoice.applyAmount.toLocaleString('es-CO')"></span>
+                                    </span>
+                                    <span x-show="invoice.applyAmount > 0 && invoice.applyAmount < invoice.pending" class="block text-[11px] text-red-500 font-semibold">
+                                        Quedará debiendo: $<span x-text="(invoice.pending - invoice.applyAmount).toLocaleString('es-CO')"></span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                {% else %}
+                <div class="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-300">
+                    <span class="text-4xl">🎉</span>
+                    <p class="text-gray-600 font-bold mt-2">No existen facturas pendientes de cobro.</p>
+                    <p class="text-xs text-gray-400 mt-1">El cliente no tiene cuentas activas por pagar.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="flex justify-between items-center mt-8 pt-6 border-t border-gray-200">
+                <a href="{% url 'client_statement' client.id %}" class="px-5 py-2.5 font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition text-sm">
+                    Cancelar
+                </a>
+                <button type="submit" class="px-8 py-3 font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-lg hover:shadow-xl transition active:scale-95 text-base flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                    <span>Guardar y Aplicar Pago</span>
+                </button>
+            </div>
+        </form>
+    </div>
 </body>
 </html>

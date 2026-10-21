@@ -1,48 +1,170 @@
 {% extends 'pos/base.html' %}
+{% load humanize %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto bg-white p-8 rounded-xl shadow-sm border border-brand-100">
-    <div class="flex justify-between items-center mb-6">
-        <h2 class="text-2xl font-bold text-gray-800">Editar Producto</h2>
-        <a href="{% url 'inventory' %}" class="text-gray-500 hover:text-gray-700">Cancelar</a>
+<div class="max-w-2xl mx-auto py-4 sm:py-6" x-data="{ price: Number('{{ product.price|default:0 }}') || 0, stock: Number('{{ product.stock|default:0 }}') || 0 }">
+
+    <!-- Main Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        
+        <!-- Header -->
+        <div class="p-6 sm:p-7 border-b border-slate-100 bg-gradient-to-b from-slate-50/70 to-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                        ID #{{ product.id }}
+                    </span>
+                    <span 
+                        :class="stock <= 0 ? 'bg-rose-50 text-rose-700 border-rose-200' : (stock <= 5 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200')"
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold border transition-colors"
+                        x-text="stock <= 0 ? 'Agotado' : (stock <= 5 ? 'Stock Bajo' : 'Disponible')"
+                    >
+                        {% if product.stock <= 0 %}Agotado{% elif product.stock <= 5 %}Stock Bajo{% else %}Disponible{% endif %}
+                    </span>
+                </div>
+                <h1 class="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">Editar Producto</h1>
+                <p class="text-xs sm:text-sm text-slate-500 mt-0.5">Modifica los datos del artículo, código de barras y existencia en inventario.</p>
+            </div>
+
+            <a href="{% url 'inventory' %}" 
+               class="inline-flex items-center justify-center gap-1.5 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl font-bold text-xs sm:text-sm transition active:scale-95 border border-slate-200/80 shadow-2xs self-start sm:self-auto">
+                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                <span>Volver al Inventario</span>
+            </a>
+        </div>
+
+        <!-- Form Body -->
+        <form method="post" class="p-6 sm:p-7 space-y-5">
+            {% csrf_token %}
+
+            <!-- Nombre del Producto -->
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                    Nombre del Producto <span class="text-rose-500">*</span>
+                </label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                        </svg>
+                    </div>
+                    <input 
+                        type="text" 
+                        name="name" 
+                        value="{{ product.name }}" 
+                        required
+                        placeholder="Ej: Gaseosa Postobón 350ml / Cuaderno 100 Hojas"
+                        class="w-full bg-slate-50 hover:bg-white focus:bg-white text-slate-800 font-medium pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition outline-none text-sm sm:text-base shadow-2xs"
+                    />
+                </div>
+            </div>
+
+            <!-- Código de Barras -->
+            <div>
+                <div class="flex items-center justify-between mb-1.5">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                        Código de Barras
+                    </label>
+                    <span class="text-[11px] text-slate-400 font-medium">Opcional para lectura láser</span>
+                </div>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+                        </svg>
+                    </div>
+                    <input 
+                        type="text" 
+                        name="barcode" 
+                        value="{{ product.barcode|default:'' }}"
+                        placeholder="Ej: 770123456789 (o escanea directamente)"
+                        class="w-full bg-slate-50 hover:bg-white focus:bg-white text-slate-800 font-mono pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition outline-none text-sm sm:text-base shadow-2xs"
+                    />
+                </div>
+            </div>
+
+            <!-- Grid 2 Columnas: Precio & Stock -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                <!-- Precio de Venta -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                        Precio de Venta <span class="text-rose-500">*</span>
+                    </label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500 font-black text-lg">
+                            $
+                        </div>
+                        <input 
+                            type="number" 
+                            step="0.01" 
+                            name="price" 
+                            x-model.number="price"
+                            required
+                            placeholder="0"
+                            class="w-full bg-slate-50 hover:bg-white focus:bg-white text-slate-900 font-black pl-9 pr-4 py-3 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition outline-none text-base sm:text-lg shadow-2xs"
+                        />
+                    </div>
+                    <span class="text-[11px] text-slate-400 mt-1 block">Precio por unidad al público (COP)</span>
+                </div>
+
+                <!-- Stock Actual -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                        Stock Actual <span class="text-rose-500">*</span>
+                    </label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+                            </svg>
+                        </div>
+                        <input 
+                            type="number" 
+                            name="stock" 
+                            x-model.number="stock"
+                            required
+                            placeholder="0"
+                            class="w-full bg-slate-50 hover:bg-white focus:bg-white text-slate-900 font-black pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition outline-none text-base sm:text-lg shadow-2xs"
+                        />
+                    </div>
+                    <span class="text-[11px] text-slate-400 mt-1 block">Unidades físicas disponibles</span>
+                </div>
+            </div>
+
+            <!-- Dynamic Valuation Card -->
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between text-xs sm:text-sm">
+                <span class="text-slate-600 font-medium flex items-center gap-2">
+                    <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                    <span>Valor estimado en inventario:</span>
+                </span>
+                <span class="font-black text-slate-800 text-sm sm:text-base">
+                    $<span x-text="(Number(price || 0) * Number(stock || 0)).toLocaleString('es-CO')">0</span> COP
+                </span>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="pt-4 flex flex-col sm:flex-row items-center gap-3">
+                <button 
+                    type="submit"
+                    class="w-full sm:flex-1 py-3.5 px-6 bg-brand-500 hover:bg-brand-400 text-white font-extrabold rounded-xl shadow-md hover:shadow-lg transition-all duration-200 active:scale-98 flex items-center justify-center gap-2 text-sm sm:text-base"
+                >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    <span>Guardar Cambios</span>
+                </button>
+
+                <a 
+                    href="{% url 'inventory' %}"
+                    class="w-full sm:w-auto py-3.5 px-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition active:scale-98 text-center text-xs sm:text-sm"
+                >
+                    Cancelar
+                </a>
+            </div>
+        </form>
     </div>
-
-    <form method="post" class="space-y-4">
-        {% csrf_token %}
-
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
-            <input type="text" name="name" value="{{ product.name }}" required
-                class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">
-        </div>
-
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Código de Barras</label>
-            <input type="text" name="barcode" value="{{ product.barcode|default:'' }}"
-                class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">
-        </div>
-
-        <div class="grid grid-cols-2 gap-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Precio</label>
-                <input type="number" step="0.01" name="price" value="{{ product.price }}" required
-                    class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">
-            </div>
-
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Stock Actual</label>
-                <input type="number" name="stock" value="{{ product.stock }}" required
-                    class="w-full rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500">
-                <p class="text-xs text-gray-500 mt-1">Para ingresar mercancia, usa la opción rápida en inventario.</p>
-            </div>
-        </div>
-
-        <div class="pt-4">
-            <button type="submit"
-                class="w-full py-3 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-md">
-                Guardar Cambios
-            </button>
-        </div>
-    </form>
 </div>
 {% endblock %}

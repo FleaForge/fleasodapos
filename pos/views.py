@@ -1,11 +1,12 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.db.models import Sum, Q, F
+from django.db.models import Sum, Q, F, Count
 from django.utils import timezone
 from django.contrib import messages
 from django.http import HttpResponse
 from .models import Product, Client, Sale, SaleItem, Payment
 from django.template.loader import get_template
 from xhtml2pdf import pisa
+import json
 
 from django.contrib.auth.decorators import login_required
 
@@ -25,25 +26,100 @@ def get_cart_data(session):
 @login_required
 def dashboard(request):
     now = timezone.now()
-    # Monthly sales (current month)
-    monthly_sales = Sale.objects.filter(
+    today = now.date()
+    
+    # 1. Ventas de Hoy (Excluye ajustes contables de cartera)
+    today_sales_qs = Sale.objects.filter(date__date=today, is_annulled=False, is_adjustment=False)
+    today_sales = today_sales_qs.aggregate(Sum('total'))['total__sum'] or 0
+    today_sales_count = today_sales_qs.count()
+    
+    # 2. Ventas del Mes (Excluye ajustes contables de cartera)
+    month_sales_qs = Sale.objects.filter(
         date__year=now.year,
         date__month=now.month,
-        is_annulled=False
-    ).aggregate(Sum('total'))['total__sum'] or 0
+        is_annulled=False,
+        is_adjustment=False
+    )
+    monthly_sales = month_sales_qs.aggregate(Sum('total'))['total__sum'] or 0
+    monthly_sales_count = month_sales_qs.count()
+    monthly_cash = month_sales_qs.filter(payment_method='CASH').aggregate(Sum('total'))['total__sum'] or 0
+    monthly_credit = month_sales_qs.filter(payment_method='CREDIT').aggregate(Sum('total'))['total__sum'] or 0
     
-    today_sales = Sale.objects.filter(date__date=now.date(), is_annulled=False).aggregate(Sum('total'))['total__sum'] or 0
-    
-    # Calculate detailed debt: Sum of (Credit Sales Total) - Sum of (All Payments)
-    # This ensures the portfolio decreases as clients make payments
+    # 3. Recaudos / Abonos recibidos este mes
+    monthly_payments = Payment.objects.filter(
+        date__year=now.year,
+        date__month=now.month,
+        is_annulled=False,
+        is_consolidation=False
+    ).aggregate(Sum('amount'))['amount__sum'] or 0
+
+    # 4. Cartera Total Pendiente (Incluye créditos comerciales y ajustes pendientes)
     total_credit_sales = Sale.objects.filter(payment_method='CREDIT', is_annulled=False).aggregate(Sum('total'))['total__sum'] or 0
-    total_payments = Payment.objects.aggregate(Sum('amount'))['amount__sum'] or 0
-    debt_pending = total_credit_sales - total_payments
+    total_payments = Payment.objects.filter(is_annulled=False).aggregate(Sum('amount'))['amount__sum'] or 0
+    debt_pending = max(0, total_credit_sales - total_payments)
+    
+    # 5. Inventario & Clientes
+    total_products = Product.objects.count()
+    low_stock_products = Product.objects.filter(stock__lte=5).order_by('stock')[:5]
+    low_stock_count = Product.objects.filter(stock__lte=5).count()
+    total_clients = Client.objects.count()
+    
+    # 6. Tendencia de Ventas (Últimos 14 Días comerciales)
+    fourteen_days_ago = today - timezone.timedelta(days=13)
+    sales_14_days = Sale.objects.filter(
+        date__date__gte=fourteen_days_ago,
+        date__date__lte=today,
+        is_annulled=False,
+        is_adjustment=False
+    ).values('date__date').annotate(daily_sum=Sum('total'))
+    daily_dict = {item['date__date']: item['daily_sum'] for item in sales_14_days}
+    
+    labels_trend = []
+    data_trend = []
+    for i in range(14):
+        d = fourteen_days_ago + timezone.timedelta(days=i)
+        labels_trend.append(d.strftime('%d/%m'))
+        data_trend.append(int(daily_dict.get(d, 0)))
+        
+    # 7. Composición de Flujo / Proceso Financiero
+    flow_labels = ['Ventas de Contado', 'Abonos Recaudados', 'Cartera Pendiente']
+    flow_data = [int(monthly_cash), int(monthly_payments), int(debt_pending)]
+    
+    # 8. Top 5 Productos Más Vendidos
+    top_items = SaleItem.objects.filter(sale__is_annulled=False).values('product__name').annotate(
+        total_qty=Sum('quantity'),
+        total_revenue=Sum(F('quantity') * F('price'))
+    ).order_by('-total_qty')[:5]
+    
+    top_prod_labels = [item['product__name'] for item in top_items]
+    top_prod_data = [item['total_qty'] for item in top_items]
+    
+    # 9. Últimas Operaciones (Facturas Recientes)
+    recent_sales = Sale.objects.filter(is_annulled=False).select_related('client').order_by('-date')[:6]
     
     context = {
         'total_sales': monthly_sales,
+        'monthly_sales_count': monthly_sales_count,
         'today_sales': today_sales,
+        'today_sales_count': today_sales_count,
         'debt_pending': debt_pending,
+        'monthly_cash': monthly_cash,
+        'monthly_credit': monthly_credit,
+        'monthly_payments': monthly_payments,
+        'total_products': total_products,
+        'low_stock_count': low_stock_count,
+        'low_stock_products': low_stock_products,
+        'total_clients': total_clients,
+        'recent_sales': recent_sales,
+        
+        # Chart JSON data
+        'labels_trend_json': json.dumps(labels_trend),
+        'data_trend_json': json.dumps(data_trend),
+        'flow_labels_json': json.dumps(flow_labels),
+        'flow_data_json': json.dumps(flow_data),
+        'top_prod_labels_json': json.dumps(top_prod_labels),
+        'top_prod_data_json': json.dumps(top_prod_data),
+        'now': now,
     }
     return render(request, 'pos/dashboard.html', context)
 
@@ -67,6 +143,113 @@ def clients(request):
         return render(request, 'pos/partials/client_list.html', {'clients': clients_list})
     return render(request, 'pos/clients.html', {'clients': clients_list})
 
+def reconcile_client_allocations(client):
+    """
+    Conciliación automática estricta FIFO (First-In, First-Out) de cartera:
+    Distribuye todos los pagos activos (no anulados) del cliente sobre
+    sus ventas a crédito activas (no anuladas), desde la más antigua a la más nueva.
+    Garantiza que:
+    1. Si client.balance <= 0, todas las facturas a crédito quedan saldadas con pending_balance == 0.
+    2. Las facturas más antiguas se liquidan al 100% antes de abonar a las siguientes.
+    3. Ninguna factura queda con saldo pendiente ficticio si existen pagos registrados.
+    4. La suma de pending_balance de todas las facturas coincide exactamente con client.balance (cuando balance > 0).
+    """
+    from .models import Sale, Payment, PaymentAllocation
+    from django.db import transaction
+
+    with transaction.atomic():
+        credit_sales = list(Sale.objects.filter(
+            client=client, 
+            payment_method='CREDIT', 
+            is_annulled=False
+        ).order_by('date', 'id'))
+        
+        payments = list(Payment.objects.filter(
+            client=client, 
+            is_annulled=False
+        ).order_by('date', 'id'))
+
+        # Limpiar asignaciones previas del cliente para recalcular limpiamente según FIFO
+        PaymentAllocation.objects.filter(sale__client=client).delete()
+        PaymentAllocation.objects.filter(payment__client=client).delete()
+
+        if not credit_sales or not payments:
+            return
+
+        sale_pending = {s.id: s.total for s in credit_sales}
+        sale_idx = 0
+        num_sales = len(credit_sales)
+
+        for payment in payments:
+            payment_rem = payment.amount
+            while payment_rem > 0 and sale_idx < num_sales:
+                current_sale = credit_sales[sale_idx]
+                needed = sale_pending[current_sale.id]
+
+                if needed <= 0:
+                    sale_idx += 1
+                    continue
+
+                alloc_amount = min(payment_rem, needed)
+                PaymentAllocation.objects.create(
+                    payment=payment,
+                    sale=current_sale,
+                    amount=alloc_amount
+                )
+                sale_pending[current_sale.id] -= alloc_amount
+                payment_rem -= alloc_amount
+
+                if sale_pending[current_sale.id] <= 0:
+                    sale_idx += 1
+
+def consolidate_client_debt_after_payment(client, source_payment):
+    """
+    Cuando se registra un abono y aún queda saldo pendiente:
+    - Liquida las facturas/productos anteriores que existían hasta ese abono.
+    - Deja un único Ajuste de Cartera con el saldo total restante.
+    - Las nuevas compras se agregarán como nuevas cuentas a partir de ese punto.
+    """
+    reconcile_client_allocations(client)
+    
+    # Obtener todas las cuentas que quedaron con saldo pendiente tras el abono
+    pending_sales = list(
+        client.sale_set.filter(payment_method='CREDIT', is_annulled=False)
+        .exclude(consolidation_source_payment=source_payment)
+        .order_by('date', 'id')
+    )
+    unpaid_sales = [s for s in pending_sales if s.pending_balance > 0]
+    total_remaining = sum(s.pending_balance for s in unpaid_sales)
+    
+    if total_remaining <= 0 or not unpaid_sales:
+        return None
+        
+    now = timezone.now()
+    
+    # 1. Pago de transferencia interna para saldar por completo las cuentas anteriores
+    consolidation_payment = Payment.objects.create(
+        client=client,
+        amount=total_remaining,
+        date=now + timezone.timedelta(milliseconds=500),
+        is_consolidation=True,
+        consolidation_source_payment=source_payment,
+        note=f"Liquidación y consolidación de cuentas anteriores tras abono de ${source_payment.amount:,}"
+    )
+    
+    # 2. Nuevo Ajuste de Cartera con el saldo consolidado de la deuda
+    consolidation_sale = Sale.objects.create(
+        client=client,
+        payment_method='CREDIT',
+        is_adjustment=True,
+        consolidation_source_payment=source_payment,
+        total=total_remaining,
+        date=now + timezone.timedelta(seconds=1),
+        note=f"Saldo consolidado de cartera tras abono de ${source_payment.amount:,}"
+    )
+    
+    # 3. Recalcular las asignaciones FIFO para que las cuentas viejas queden en 0 y solo quede el nuevo ajuste
+    reconcile_client_allocations(client)
+    return consolidation_sale
+
 def get_account_timeline(client, exclude_annulled=False):
     sales = Sale.objects.filter(client=client).order_by('date')
     if exclude_annulled:
@@ -85,7 +268,7 @@ def get_account_timeline(client, exclude_annulled=False):
                 'type': 'SALE',
                 'date': sale.date,
                 'amount': sale.total,
-                'ref': f"Factura #{sale.id}",
+                'ref': f"Ajuste de Cartera #{sale.id}" if getattr(sale, 'is_adjustment', False) else f"Factura #{sale.id}",
                 'items': sale.items.all(),
                 'object': sale,
                 'is_annulled': sale.is_annulled
@@ -147,7 +330,7 @@ def get_account_timeline(client, exclude_annulled=False):
         calculated_timeline.append(event)
         
     oldest_unpaid = None
-    for sale in client.sale_set.filter(payment_method='CREDIT', is_annulled=False).order_by('date'):
+    for sale in client.sale_set.filter(payment_method='CREDIT', is_annulled=False).order_by('date', 'id'):
         if sale.pending_balance > 0:
             oldest_unpaid = sale
             break
@@ -167,6 +350,9 @@ def get_account_timeline(client, exclude_annulled=False):
 def client_statement(request, client_id):
     client = get_object_or_404(Client, id=client_id)
     
+    # 1. Reconciliación estricta FIFO de cartera
+    reconcile_client_allocations(client)
+    
     full_timeline, cutoff_index = get_account_timeline(client)
     
     # Split timeline into History and Active
@@ -180,19 +366,24 @@ def client_statement(request, client_id):
         history_timeline = []
         active_timeline = full_timeline
 
-    # Summary fields
-    # We show LIFETIME totals or ACTIVE totals? User request: "se reinicie la información".
-    # Assuming "reset" means display purposes. 
-    # Current debt is strictly the final balance.
+    real_balance = client.balance
+    current_debt = max(0, real_balance)
+    credit_balance = abs(real_balance) if real_balance < 0 else 0
     
-    current_debt = active_timeline[-1]['balance'] if active_timeline else 0
-    
-    # Let's calculate totals for the ACTIVE period only, to match the "reset" feel.
     active_credit = sum(e['amount'] for e in active_timeline if e['type'] == 'SALE')
     active_paid = sum(e['amount'] for e in active_timeline if e['type'] == 'PAYMENT')
 
-    pending_sales = [s for s in client.sale_set.filter(payment_method='CREDIT', is_annulled=False).order_by('date') if s.pending_balance > 0]
-    recent_payments = client.payments.filter(is_annulled=False).order_by('-date')[:10]
+    if current_debt == 0:
+        pending_sales = []
+    else:
+        sales_list = list(
+            client.sale_set.filter(payment_method='CREDIT', is_annulled=False)
+            .prefetch_related('items__product', 'allocations__payment')
+            .order_by('date', 'id')
+        )
+        pending_sales = [s for s in sales_list if s.pending_balance > 0]
+    
+    recent_payments = client.payments.filter(is_annulled=False, is_consolidation=False).prefetch_related('allocations__sale').order_by('-date')[:15]
 
     context = {
         'client': client,
@@ -204,6 +395,7 @@ def client_statement(request, client_id):
         'total_credit': active_credit,
         'total_paid': active_paid,
         'current_debt': current_debt,
+        'credit_balance': credit_balance,
         'now': timezone.now(),
         'is_public': False
     }
@@ -211,6 +403,8 @@ def client_statement(request, client_id):
 
 def client_public_statement(request, client_id):
     client = get_object_or_404(Client, id=client_id)
+    
+    reconcile_client_allocations(client)
     
     full_timeline, cutoff_index = get_account_timeline(client, exclude_annulled=True)
     
@@ -221,22 +415,38 @@ def client_public_statement(request, client_id):
         if history_timeline:
             previous_balance = history_timeline[-1]['balance']
     else:
+        history_timeline = []
         active_timeline = full_timeline
         
-    current_debt = active_timeline[-1]['balance'] if active_timeline else 0
+    real_balance = client.balance
+    current_debt = max(0, real_balance)
+    credit_balance = abs(real_balance) if real_balance < 0 else 0
+    
     active_credit = sum(e['amount'] for e in active_timeline if e['type'] == 'SALE')
     active_paid = sum(e['amount'] for e in active_timeline if e['type'] == 'PAYMENT')
 
-    pending_sales = [s for s in client.sale_set.filter(payment_method='CREDIT', is_annulled=False).order_by('date') if s.pending_balance > 0]
+    if current_debt == 0:
+        pending_sales = []
+    else:
+        sales_list = list(
+            client.sale_set.filter(payment_method='CREDIT', is_annulled=False)
+            .prefetch_related('items__product', 'allocations__payment')
+            .order_by('date', 'id')
+        )
+        pending_sales = [s for s in sales_list if s.pending_balance > 0]
+
+    recent_payments = client.payments.filter(is_annulled=False, is_consolidation=False).prefetch_related('allocations__sale').order_by('-date')[:15]
 
     context = {
         'client': client,
         'timeline': active_timeline,
         'previous_balance': previous_balance,
         'pending_sales': pending_sales,
+        'recent_payments': recent_payments,
         'total_credit': active_credit,
         'total_paid': active_paid,
         'current_debt': current_debt,
+        'credit_balance': credit_balance,
         'now': timezone.now(),
         'is_public': True
     }
@@ -246,63 +456,73 @@ def client_public_statement(request, client_id):
 def add_payment(request, client_id):
     client = get_object_or_404(Client, id=client_id)
     
+    reconcile_client_allocations(client)
+    
     if request.method == 'POST':
         amount = int(request.POST.get('amount', 0))
-        note = request.POST.get('note', '')
+        note = request.POST.get('note', '').strip()
         
-        # Determine allocations from POST. Format: allocation_SALEID = amount
-        allocations = {}
-        for key, value in request.POST.items():
-            if key.startswith('allocation_'):
-                try:
-                    sale_id = int(key.split('_')[1])
-                    alloc_amount = int(value or 0)
-                    if alloc_amount > 0:
-                        allocations[sale_id] = alloc_amount
-                except ValueError:
-                    pass
+        if amount <= 0:
+            messages.error(request, 'El monto recibido debe ser mayor a cero.')
+            return redirect('add_payment', client_id=client.id)
         
-        # Verify total allocation doesn't exceed amount
-        total_allocated = sum(allocations.values())
-        
-        # Create Payment
+        # Registrar el pago real en caja
         payment = Payment.objects.create(
             client=client,
             amount=amount,
-            note=note
+            note=note or "Abono a cartera"
         )
         
-        # Create Allocations
-        from .models import PaymentAllocation
+        # Reconciliar en cascada estricta FIFO de la deuda más vieja a la más nueva
+        reconcile_client_allocations(client)
         
-        # Fallback: Auto-distribute if frontend didn't send explicit allocations
-        if not allocations and amount > 0:
-            rem = amount
-            sales = client.sale_set.filter(payment_method='CREDIT', is_annulled=False).order_by('date')
-            for s in sales:
-                if rem <= 0: break
-                pb = s.pending_balance
-                if pb > 0:
-                    alloc_val = min(pb, rem)
-                    allocations[s.id] = alloc_val
-                    rem -= alloc_val
-
-        for sale_id, alloc_val in allocations.items():
-            sale = Sale.objects.filter(id=sale_id).first()
-            if sale:
-                PaymentAllocation.objects.create(
-                    payment=payment,
-                    sale=sale,
-                    amount=alloc_val
-                )
-                
-        messages.success(request, 'Recibo de Caja registrado correctamente')
+        new_balance = client.balance
+        if new_balance > 0:
+            # Consolidar cuentas anteriores dejando un único Ajuste de Cartera con el saldo total restante
+            consolidate_client_debt_after_payment(client, payment)
+            messages.success(request, f'Pago de ${amount:,} registrado correctamente. Se liquidaron las cuentas anteriores y se consolidó el saldo restante de ${new_balance:,} en un Ajuste de Cartera.')
+        else:
+            messages.success(request, f'¡Excelente! Se registró el pago de ${amount:,}. La cuenta del cliente ha quedado totalmente en PAZ Y SALVO (Saldo: $0).')
+            
         return redirect('client_statement', client_id=client_id)
     
-    # GET Request: Prepare pending invoices
-    pending_sales = [s for s in client.sale_set.filter(payment_method='CREDIT', is_annulled=False).order_by('date') if s.pending_balance > 0]
+    current_debt = max(0, client.balance)
+    pending_sales = [s for s in client.sale_set.filter(payment_method='CREDIT', is_annulled=False).order_by('date', 'id') if s.pending_balance > 0]
     
-    return render(request, 'pos/add_payment.html', {'client': client, 'pending_sales': pending_sales})
+    return render(request, 'pos/add_payment.html', {
+        'client': client, 
+        'pending_sales': pending_sales,
+        'current_debt': current_debt
+    })
+
+@login_required
+def adjust_client_balance(request, client_id):
+    """
+    Permite registrar un Saldo Inicial o Ajuste de Deuda sin necesidad de
+    crear productos ficticios en el inventario ni afectar estadísticas de ventas.
+    """
+    client = get_object_or_404(Client, id=client_id)
+    if request.method == 'POST':
+        amount = int(request.POST.get('amount', 0))
+        concept = request.POST.get('concept', '').strip() or 'Saldo inicial / Ajuste de cartera'
+        
+        if amount <= 0:
+            messages.error(request, 'El monto del saldo/ajuste debe ser mayor a cero.')
+            return redirect('client_statement', client_id=client.id)
+            
+        Sale.objects.create(
+            client=client,
+            payment_method='CREDIT',
+            total=amount,
+            is_paid=False,
+            is_adjustment=True,
+            note=f"Ajuste Contable: {concept}",
+            date=timezone.now()
+        )
+        reconcile_client_allocations(client)
+        messages.success(request, f'Saldo / Ajuste de cartera de ${amount:,} asignado a {client.name}. Inventario no afectado.')
+        return redirect('client_statement', client_id=client.id)
+    return redirect('client_statement', client_id=client.id)
 
 @login_required
 def annul_payment(request, payment_id):
@@ -311,7 +531,14 @@ def annul_payment(request, payment_id):
         if not payment.is_annulled:
             payment.is_annulled = True
             payment.save()
-            messages.success(request, 'Pago anulado correctamente. El saldo a favor se ha reversado.')
+            
+            # Anular también cualquier pago o ajuste de consolidación generado por este abono
+            Payment.objects.filter(consolidation_source_payment=payment).update(is_annulled=True)
+            Sale.objects.filter(consolidation_source_payment=payment).update(is_annulled=True)
+            
+            # Recalcular asignaciones tras la anulación
+            reconcile_client_allocations(payment.client)
+            messages.success(request, 'Pago y consolidación anulados correctamente. Las cuentas anteriores se han reactivado.')
         return redirect('client_statement', client_id=payment.client_id)
     return redirect('dashboard')
 
@@ -559,6 +786,12 @@ def public_check_debt(request):
             return HttpResponse('<div class="bg-red-100 text-red-700 p-4 rounded-xl text-center">No encontramos un cliente con ese número.</div>')
 @login_required
 def report_analytics(request):
+    # Search & Filter Parameters
+    search_query = request.GET.get('q', '').strip()
+    status_filter = request.GET.get('status', 'all') # 'all', 'active', 'annulled'
+    method_filter = request.GET.get('method', 'all') # 'all', 'CASH', 'CREDIT'
+    client_id_filter = request.GET.get('client_id', '').strip()
+
     # Date Filtering
     date_start_str = request.GET.get('date_start')
     date_end_str = request.GET.get('date_end')
@@ -566,57 +799,173 @@ def report_analytics(request):
     today = timezone.now().date()
     
     if date_start_str:
-        date_start = timezone.datetime.strptime(date_start_str, '%Y-%m-%d').date()
+        try:
+            date_start = timezone.datetime.strptime(date_start_str, '%Y-%m-%d').date()
+        except ValueError:
+            date_start = today - timezone.timedelta(days=30)
     else:
         date_start = today - timezone.timedelta(days=30)
         
     if date_end_str:
-        date_end = timezone.datetime.strptime(date_end_str, '%Y-%m-%d').date()
+        try:
+            date_end = timezone.datetime.strptime(date_end_str, '%Y-%m-%d').date()
+        except ValueError:
+            date_end = today
     else:
         date_end = today
 
-    # Filter Querysets
-    # Use __date__range for inclusive filtering on DateTimeField
-    sales_qs = Sale.objects.filter(date__date__gte=date_start, date__date__lte=date_end, is_annulled=False).order_by('-date')
+    all_clients = Client.objects.all().order_by('name')
+    selected_client = None
+    if client_id_filter and client_id_filter.isdigit():
+        selected_client = Client.objects.filter(id=int(client_id_filter)).first()
 
-    # 1. Sales by Product (Quantity)
-    # Filter items by the filtered sales
-    product_sales = SaleItem.objects.filter(sale__in=sales_qs).values('product__name').annotate(
-        total_qty=Sum('quantity')
+    # Active sales query for KPIs and charts in selected period (commercial sales only)
+    active_period_sales = Sale.objects.filter(
+        date__date__gte=date_start,
+        date__date__lte=date_end,
+        is_annulled=False,
+        is_adjustment=False
+    )
+
+    # Invoices query for listing / searching (includes sales & adjustments)
+    sales_qs = Sale.objects.all().select_related('client').prefetch_related('items__product')
+
+    # Apply Client Filter if selected
+    if selected_client:
+        active_period_sales = active_period_sales.filter(client=selected_client)
+        sales_qs = sales_qs.filter(client=selected_client)
+
+    # Adjustments total in period (tracked separately from trading revenue)
+    adjustments_qs = Sale.objects.filter(
+        date__date__gte=date_start,
+        date__date__lte=date_end,
+        is_annulled=False,
+        is_adjustment=True
+    )
+    if selected_client:
+        adjustments_qs = adjustments_qs.filter(client=selected_client)
+    adjustments_total = adjustments_qs.aggregate(Sum('total'))['total__sum'] or 0
+
+    # Apply search filter
+    clean_id = search_query.lstrip('#')
+    if search_query:
+        search_filter = Q(client__name__icontains=search_query) | Q(client__phone__icontains=search_query)
+        if clean_id.isdigit():
+            search_filter |= Q(id=int(clean_id))
+        sales_qs = sales_qs.filter(search_filter)
+        # Only restrict dates if explicit checkbox or when no search query
+        if request.GET.get('filter_dates_with_search') == '1':
+            sales_qs = sales_qs.filter(date__date__gte=date_start, date__date__lte=date_end)
+    else:
+        sales_qs = sales_qs.filter(date__date__gte=date_start, date__date__lte=date_end)
+
+    # Apply status filter
+    if status_filter == 'active':
+        sales_qs = sales_qs.filter(is_annulled=False)
+    elif status_filter == 'annulled':
+        sales_qs = sales_qs.filter(is_annulled=True)
+
+    # Apply payment method filter
+    if method_filter in ['CASH', 'CREDIT']:
+        sales_qs = sales_qs.filter(payment_method=method_filter)
+
+    sales_qs = sales_qs.order_by('-date')
+
+    # Handle HTMX live search / partial update
+    is_htmx = getattr(request, 'htmx', False) or request.headers.get('HX-Request') == 'true'
+    if is_htmx and request.GET.get('table_only') == '1':
+        return render(request, 'pos/partials/invoice_table.html', {
+            'invoices': sales_qs,
+            'search_query': search_query,
+            'status_filter': status_filter,
+            'method_filter': method_filter,
+        })
+
+    # 1. Sales by Product (Quantity) for period
+    product_sales = SaleItem.objects.filter(sale__in=active_period_sales).values('product__name').annotate(
+        total_qty=Sum('quantity'),
+        total_amount=Sum(F('quantity') * F('price'))
     ).order_by('-total_qty')[:10] 
     
     labels_products = [item['product__name'] for item in product_sales]
     data_products = [item['total_qty'] for item in product_sales]
     
-    # 2. Daily Sales Trend
-    daily_sales = sales_qs.values('date__date').annotate(
+    # 2. Daily Sales Trend for period
+    daily_sales = active_period_sales.values('date__date').annotate(
         daily_total=Sum('total')
     ).order_by('date__date')
     
     labels_dates = [item['date__date'].strftime('%d/%m') for item in daily_sales]
     data_sales = [int(item['daily_total']) for item in daily_sales]
     
-    # 3. KPI Metrics
-    total_period = sales_qs.aggregate(Sum('total'))['total__sum'] or 0
-    count_period = sales_qs.count()
-    # Handle Division by zero
+    # 3. KPI Metrics for period
+    total_period = active_period_sales.aggregate(Sum('total'))['total__sum'] or 0
+    count_period = active_period_sales.count()
     avg_ticket = total_period / count_period if count_period > 0 else 0
     
-    cash_total = sales_qs.filter(payment_method='CASH').aggregate(Sum('total'))['total__sum'] or 0
-    credit_total = sales_qs.filter(payment_method='CREDIT').aggregate(Sum('total'))['total__sum'] or 0
+    cash_total = active_period_sales.filter(payment_method='CASH').aggregate(Sum('total'))['total__sum'] or 0
+    credit_total = active_period_sales.filter(payment_method='CREDIT').aggregate(Sum('total'))['total__sum'] or 0
+    annulled_period = Sale.objects.filter(
+        date__date__gte=date_start, 
+        date__date__lte=date_end, 
+        is_annulled=True
+    )
+    if selected_client:
+        annulled_period = annulled_period.filter(client=selected_client)
+    annulled_period_count = annulled_period.count()
+
+    # 4. Top Clients Ranking (when general view) or Client Profile (when selected)
+    top_clients = []
+    client_metrics = {}
+    if selected_client:
+        client_metrics = {
+            'balance': selected_client.balance,
+            'lifetime_total': Sale.objects.filter(client=selected_client, is_annulled=False, is_adjustment=False).aggregate(Sum('total'))['total__sum'] or 0,
+            'lifetime_count': Sale.objects.filter(client=selected_client, is_annulled=False, is_adjustment=False).count(),
+        }
+    else:
+        # General view: compute Top 10 Clients by total purchases in the period
+        period_clients = Sale.objects.filter(
+            date__date__gte=date_start,
+            date__date__lte=date_end,
+            is_annulled=False,
+            is_adjustment=False
+        ).values('client__id', 'client__name', 'client__phone').annotate(
+            total_spent=Sum('total'),
+            invoices_count=Count('id'),
+            credit_spent=Sum('total', filter=Q(payment_method='CREDIT')),
+            cash_spent=Sum('total', filter=Q(payment_method='CASH'))
+        ).order_by('-total_spent')[:10]
+
+        for tc in period_clients:
+            cl = Client.objects.filter(id=tc['client__id']).first()
+            tc['current_balance'] = cl.balance if cl else 0
+            top_clients.append(tc)
 
     context = {
+        'all_clients': all_clients,
+        'selected_client': selected_client,
+        'selected_client_id': client_id_filter,
+        'client_metrics': client_metrics,
+        'top_clients': top_clients,
         'labels_products': labels_products,
         'data_products': data_products,
         'labels_dates': labels_dates,
         'data_sales': data_sales,
-        'invoices': sales_qs, # Pass the detailed list
+        'invoices': sales_qs,
         'date_start': date_start.strftime('%Y-%m-%d'),
         'date_end': date_end.strftime('%Y-%m-%d'),
         'total_period': total_period,
+        'count_period': count_period,
         'avg_ticket': avg_ticket,
         'cash_total': cash_total,
-        'credit_total': credit_total
+        'credit_total': credit_total,
+        'adjustments_total': adjustments_total,
+        'annulled_period': annulled_period_count,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'method_filter': method_filter,
+        'filter_dates_with_search': request.GET.get('filter_dates_with_search', ''),
     }
     return render(request, 'pos/reports.html', context)
 
@@ -628,6 +977,8 @@ def invoice_detail(request, sale_id):
 def client_statement_pdf(request, client_id):
     client = get_object_or_404(Client, id=client_id)
     
+    reconcile_client_allocations(client)
+    
     full_timeline, cutoff_index = get_account_timeline(client)
     
     if cutoff_index != -1:
@@ -635,18 +986,32 @@ def client_statement_pdf(request, client_id):
     else:
         active_timeline = full_timeline
         
-    current_debt = active_timeline[-1]['balance'] if active_timeline else 0
+    real_balance = client.balance
+    current_debt = max(0, real_balance)
+    credit_balance = abs(real_balance) if real_balance < 0 else 0
     active_credit = sum(e['amount'] for e in active_timeline if e['type'] == 'SALE')
     active_paid = sum(e['amount'] for e in active_timeline if e['type'] == 'PAYMENT')
 
-    pending_sales = [s for s in client.sale_set.filter(payment_method='CREDIT', is_annulled=False).order_by('date') if s.pending_balance > 0]
+    if current_debt == 0:
+        pending_sales = []
+    else:
+        pending_sales = [
+            s for s in client.sale_set.filter(payment_method='CREDIT', is_annulled=False)
+            .prefetch_related('items__product', 'allocations__payment')
+            .order_by('date', 'id')
+            if s.pending_balance > 0
+        ]
+
+    recent_payments = client.payments.filter(is_annulled=False, is_consolidation=False).prefetch_related('allocations__sale').order_by('-date')[:15]
 
     context = {
         'client': client,
         'pending_sales': pending_sales,
+        'recent_payments': recent_payments,
         'total_credit': active_credit,
         'total_paid': active_paid,
         'current_debt': current_debt,
+        'credit_balance': credit_balance,
         'now': timezone.now(),
     }
     
@@ -894,4 +1259,8 @@ def annul_sale(request, sale_id):
             messages.success(request, f'La factura #{sale.id} ha sido anulada y el inventario restaurado.')
         else:
             messages.info(request, f'La factura #{sale.id} ya estaba anulada.')
+            
+    next_url = request.POST.get('next') or request.GET.get('next')
+    if next_url:
+        return redirect(next_url)
     return redirect('invoice_detail', sale_id=sale.id)

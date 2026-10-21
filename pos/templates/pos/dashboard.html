@@ -2,39 +2,442 @@
 {% load humanize %}
 
 {% block content %}
-<div class="space-y-6">
-    <h2 class="text-3xl font-bold text-brand-500">Dashboard</h2>
+<div class="space-y-6 max-w-7xl mx-auto pb-10">
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <!-- Card 1 -->
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-brand-200">
-            <h3 class="text-sm font-semibold text-gray-500 uppercase">Ventas Hoy</h3>
-            <p class="text-3xl font-bold text-brand-500">${{ today_sales|intcomma }}</p>
+    <!-- Top Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-brand-200/80 shadow-sm">
+        <div>
+            <div class="flex items-center gap-2">
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Sistema en Línea</span>
+            </div>
+            <h2 class="text-2xl md:text-3xl font-extrabold text-slate-800 tracking-tight">Dashboard Ejecutivo</h2>
+            <p class="text-sm text-slate-500 mt-0.5">Analítica operativa, flujo de ventas y gestión de cartera en tiempo real</p>
         </div>
 
-        <!-- Card 2 -->
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-brand-200">
-            <h3 class="text-sm font-semibold text-gray-500 uppercase">Cartera (Crédito)</h3>
-            <p class="text-3xl font-bold text-red-500">${{ debt_pending|intcomma }}</p>
-        </div>
-
-        <!-- Card 3 -->
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-brand-200">
-            <h3 class="text-sm font-semibold text-gray-500 uppercase">Total Mes</h3>
-            <p class="text-3xl font-bold text-brand-400">${{ total_sales|intcomma }}</p>
-        </div>
-    </div>
-
-    <div class="bg-white rounded-xl shadow-sm border border-brand-200 p-6 overflow-hidden">
-        <h3 class="text-lg font-bold mb-4">Acciones Rápidas</h3>
-        <div class="flex gap-4">
+        <!-- Quick Process Actions -->
+        <div class="flex flex-wrap items-center gap-2.5">
             <a href="{% url 'pos' %}"
-                class="flex-1 bg-brand-500 text-white text-center py-3 rounded-lg hover:bg-brand-400 transition">Nueva
-                Venta</a>
+               class="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-400 text-white font-semibold text-sm px-4 py-2.5 rounded-xl shadow-sm hover:shadow transition active:scale-95">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                <span>Nueva Venta</span>
+            </a>
             <a href="{% url 'inventory' %}"
-                class="flex-1 bg-brand-300 text-brand-500 text-center py-3 rounded-lg hover:bg-brand-200 transition">Ver
-                Inventario</a>
+               class="inline-flex items-center gap-2 bg-slate-100 hover:bg-brand-200/50 text-slate-700 font-semibold text-sm px-4 py-2.5 rounded-xl transition active:scale-95">
+                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                </svg>
+                <span>Inventario</span>
+            </a>
+            <a href="{% url 'reports' %}"
+               class="inline-flex items-center gap-2 border border-slate-200 hover:border-brand-400 text-slate-700 font-semibold text-sm px-4 py-2.5 rounded-xl transition active:scale-95">
+                <svg class="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                <span>Ver Informes</span>
+            </a>
         </div>
     </div>
+
+    <!-- Executive KPI Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- KPI 1: Ventas Hoy -->
+        <div class="bg-white p-5 rounded-2xl border border-brand-200/80 shadow-sm relative overflow-hidden group hover:shadow-md transition">
+            <div class="flex items-start justify-between">
+                <div>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Ventas de Hoy</span>
+                    <h3 class="text-2xl lg:text-3xl font-extrabold text-slate-800 mt-1">${{ today_sales|intcomma }}</h3>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center text-brand-500">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-4 flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100">
+                <span>{{ today_sales_count }} factura{{ today_sales_count|pluralize }} emitida{{ today_sales_count|pluralize }}</span>
+                <span class="text-brand-500 font-medium">Jornada actual</span>
+            </div>
+        </div>
+
+        <!-- KPI 2: Ventas del Mes -->
+        <div class="bg-white p-5 rounded-2xl border border-brand-200/80 shadow-sm relative overflow-hidden group hover:shadow-md transition">
+            <div class="flex items-start justify-between">
+                <div>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Mes</span>
+                    <h3 class="text-2xl lg:text-3xl font-extrabold text-brand-500 mt-1">${{ total_sales|intcomma }}</h3>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-4 flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100">
+                <span>{{ monthly_sales_count }} venta{{ monthly_sales_count|pluralize }} en el mes</span>
+                <span class="text-emerald-600 font-medium">Acumulado</span>
+            </div>
+        </div>
+
+        <!-- KPI 3: Cartera por Cobrar -->
+        <div class="bg-white p-5 rounded-2xl border border-brand-200/80 shadow-sm relative overflow-hidden group hover:shadow-md transition">
+            <div class="flex items-start justify-between">
+                <div>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Cartera (Crédito)</span>
+                    <h3 class="text-2xl lg:text-3xl font-extrabold text-rose-500 mt-1">${{ debt_pending|intcomma }}</h3>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-500">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-4 flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100">
+                <span>Por recaudar</span>
+                <a href="{% url 'clients' %}" class="text-rose-500 font-semibold hover:underline">Gestionar &rarr;</a>
+            </div>
+        </div>
+
+        <!-- KPI 4: Recaudos / Abonos -->
+        <div class="bg-white p-5 rounded-2xl border border-brand-200/80 shadow-sm relative overflow-hidden group hover:shadow-md transition">
+            <div class="flex items-start justify-between">
+                <div>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Recaudos del Mes</span>
+                    <h3 class="text-2xl lg:text-3xl font-extrabold text-brand-400 mt-1">${{ monthly_payments|intcomma }}</h3>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-4 flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100">
+                <span>Abonos ingresados</span>
+                <span class="text-emerald-600 font-medium">Liquidez</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analytics Charts Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Chart 1: Daily Sales Trend (2 Columns) -->
+        <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-brand-200/80 shadow-sm">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-2">
+                <div>
+                    <h3 class="text-base font-bold text-slate-800">Evolución de Facturación Diaria</h3>
+                    <p class="text-xs text-slate-400">Tendencia de ventas en los últimos 14 días</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+                        <span class="w-2 h-2 rounded-full bg-brand-500"></span>
+                        Ventas ($ COP)
+                    </span>
+                </div>
+            </div>
+            <div class="pt-4 h-72">
+                <canvas id="salesTrendChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Chart 2: Process Flow / Cash Flow Composition -->
+        <div class="bg-white p-6 rounded-2xl border border-brand-200/80 shadow-sm flex flex-col justify-between">
+            <div>
+                <div class="pb-4 border-b border-slate-100">
+                    <h3 class="text-base font-bold text-slate-800">Proceso de Cartera & Caja</h3>
+                    <p class="text-xs text-slate-400">Distribución de ingresos vs cartera pendiente</p>
+                </div>
+                <div class="pt-4 relative flex items-center justify-center h-56">
+                    <canvas id="cashFlowChart"></canvas>
+                </div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 text-center">
+                <div>
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Contado</div>
+                    <div class="text-xs font-bold text-slate-700">${{ monthly_cash|intcomma }}</div>
+                </div>
+                <div>
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Recaudado</div>
+                    <div class="text-xs font-bold text-brand-500">${{ monthly_payments|intcomma }}</div>
+                </div>
+                <div>
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Pendiente</div>
+                    <div class="text-xs font-bold text-rose-500">${{ debt_pending|intcomma }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Second Analytics Row: Top Products & Operations / Alerts -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Top Products Bar Chart -->
+        <div class="bg-white p-6 rounded-2xl border border-brand-200/80 shadow-sm">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div>
+                    <h3 class="text-base font-bold text-slate-800">Top 5 Productos Vendidos</h3>
+                    <p class="text-xs text-slate-400">Artículos con mayor rotación en unidades</p>
+                </div>
+                <a href="{% url 'inventory' %}" class="text-xs text-brand-500 font-semibold hover:underline">Ver catálogo</a>
+            </div>
+            <div class="pt-4 h-64">
+                <canvas id="topProductsChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Recent Transactions / Operations Table (2 Columns) -->
+        <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-brand-200/80 shadow-sm flex flex-col justify-between">
+            <div>
+                <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-800">Operaciones Recientes</h3>
+                        <p class="text-xs text-slate-400">Últimos movimientos registrados en el punto de venta</p>
+                    </div>
+                    <a href="{% url 'reports' %}" class="text-xs text-brand-500 font-semibold hover:underline">Ver historial &rarr;</a>
+                </div>
+
+                <div class="overflow-x-auto mt-2">
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="text-slate-400 border-b border-slate-100 uppercase tracking-wider">
+                                <th class="py-2.5 px-3"># Factura</th>
+                                <th class="py-2.5 px-3">Fecha</th>
+                                <th class="py-2.5 px-3">Cliente</th>
+                                <th class="py-2.5 px-3">Modalidad</th>
+                                <th class="py-2.5 px-3 text-right">Monto</th>
+                                <th class="py-2.5 px-3 text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for sale in recent_sales %}
+                            <tr class="hover:bg-slate-50/80 transition">
+                                <td class="py-3 px-3 font-mono font-bold text-slate-700">#{{ sale.id }}</td>
+                                <td class="py-3 px-3 text-slate-500">{{ sale.date|date:"d/m H:i" }}</td>
+                                <td class="py-3 px-3 font-medium text-slate-800">{{ sale.client.name }}</td>
+                                <td class="py-3 px-3">
+                                    {% if sale.payment_method == 'CASH' %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        Contado
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                        Crédito
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-3 text-right font-bold text-slate-800">${{ sale.total|intcomma }}</td>
+                                <td class="py-3 px-3 text-center">
+                                    <a href="{% url 'invoice_detail' sale.id %}"
+                                       class="inline-flex items-center gap-1 text-brand-500 hover:text-brand-400 font-semibold text-xs py-1 px-2 rounded-lg hover:bg-brand-100 transition">
+                                        <span>Detalle</span>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="py-8 text-center text-slate-400">
+                                    No se registran ventas recientes en el sistema.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Operational Alerts / Stock Status Footer -->
+            {% if low_stock_count > 0 %}
+            <div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-xs text-amber-800">
+                <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                    <span><strong>Alerta de Inventario:</strong> Hay {{ low_stock_count }} producto{{ low_stock_count|pluralize }} con stock crítico (&le; 5 unidades).</span>
+                </div>
+                <a href="{% url 'inventory' %}" class="font-bold underline text-amber-900 hover:text-amber-700">Revisar stock</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
 </div>
+
+<!-- Chart.js Configuration -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const formatCOP = (val) => '$' + Number(val).toLocaleString('es-CO');
+
+        // 1. Line/Area Chart: Daily Sales Trend
+        const trendLabels = {{ labels_trend_json|safe }};
+        const trendData = {{ data_trend_json|safe }};
+
+        const ctxTrend = document.getElementById('salesTrendChart').getContext('2d');
+        const gradientSales = ctxTrend.createLinearGradient(0, 0, 0, 260);
+        gradientSales.addColorStop(0, 'rgba(85, 146, 163, 0.35)');
+        gradientSales.addColorStop(1, 'rgba(85, 146, 163, 0.01)');
+
+        new Chart(ctxTrend, {
+            type: 'line',
+            data: {
+                labels: trendLabels,
+                datasets: [{
+                    label: 'Ventas Diarias',
+                    data: trendData,
+                    borderColor: '#5592a3',
+                    borderWidth: 2.5,
+                    backgroundColor: gradientSales,
+                    fill: true,
+                    tension: 0.35,
+                    pointBackgroundColor: '#ffffff',
+                    pointBorderColor: '#5592a3',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'index',
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1e293b',
+                        titleColor: '#94a3b8',
+                        bodyColor: '#ffffff',
+                        padding: 10,
+                        boxPadding: 4,
+                        callbacks: {
+                            label: function(context) {
+                                return ' Ventas: ' + formatCOP(context.parsed.y);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#94a3b8', font: { size: 11 } }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: '#f1f5f9' },
+                        ticks: {
+                            color: '#94a3b8',
+                            font: { size: 11 },
+                            callback: function(value) {
+                                if (value >= 1000000) return '$' + (value / 1000000).toFixed(1) + 'M';
+                                if (value >= 1000) return '$' + (value / 1000).toFixed(0) + 'k';
+                                return '$' + value;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // 2. Doughnut Chart: Cash Flow / Process Composition
+        const flowLabels = {{ flow_labels_json|safe }};
+        const flowData = {{ flow_data_json|safe }};
+        const totalFlow = flowData.reduce((a, b) => a + b, 0);
+
+        const ctxFlow = document.getElementById('cashFlowChart').getContext('2d');
+        new Chart(ctxFlow, {
+            type: 'doughnut',
+            data: {
+                labels: flowLabels,
+                datasets: [{
+                    data: totalFlow === 0 ? [1] : flowData,
+                    backgroundColor: totalFlow === 0 
+                        ? ['#e2e8f0'] 
+                        : ['#3f897a', '#5592a3', '#f43f5e'],
+                    borderWidth: 2,
+                    borderColor: '#ffffff',
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '72%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12,
+                            padding: 12,
+                            font: { size: 11, family: 'Inter, system-ui, sans-serif' },
+                            color: '#475569'
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: '#1e293b',
+                        padding: 10,
+                        callbacks: {
+                            label: function(context) {
+                                if (totalFlow === 0) return ' Sin movimientos registrados';
+                                const val = flowData[context.dataIndex];
+                                const pct = totalFlow > 0 ? ((val / totalFlow) * 100).toFixed(1) + '%' : '0%';
+                                return ` ${context.label}: ${formatCOP(val)} (${pct})`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // 3. Horizontal Bar Chart: Top 5 Products
+        const prodLabels = {{ top_prod_labels_json|safe }};
+        const prodData = {{ top_prod_data_json|safe }};
+
+        const ctxProd = document.getElementById('topProductsChart').getContext('2d');
+        new Chart(ctxProd, {
+            type: 'bar',
+            data: {
+                labels: prodLabels.length ? prodLabels : ['Sin ventas aún'],
+                datasets: [{
+                    label: 'Unidades',
+                    data: prodData.length ? prodData : [0],
+                    backgroundColor: '#5592a3',
+                    hoverBackgroundColor: '#3f897a',
+                    borderRadius: 6,
+                    borderSkipped: false,
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1e293b',
+                        padding: 10,
+                        callbacks: {
+                            label: function(context) {
+                                return ` Cantidad vendida: ${context.parsed.x} unid.`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        grid: { color: '#f1f5f9' },
+                        ticks: { color: '#94a3b8', stepSize: 1 }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { color: '#475569', font: { size: 11, weight: '500' } }
+                    }
+                }
+            }
+        });
+    });
+</script>
 {% endblock %}

@@ -3,8 +3,18 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Estado de Cuenta - {{ client.name }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Estado de Cuenta - {{ client.name }} - FleasoDaPos</title>
+    
+    <!-- PWA & Apple iOS Settings -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="FleasoDaPos">
+    <link rel="apple-touch-icon" href="/static/logo.png">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <meta name="theme-color" content="#5592a3">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="//unpkg.com/alpinejs" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -16,6 +26,7 @@
 
         body {
           background: white;
+          padding: 0 !important;
         }
 
         .print-container {
@@ -33,177 +44,479 @@
     </style>
   </head>
 
-  <body class="bg-gray-100 min-h-screen p-4 md:p-8">
+  <body 
+    x-data="{ showAdjustModal: false, isGeneratingImg: false }"
+    class="bg-slate-100 min-h-screen p-3 sm:p-4 md:p-8 text-slate-800"
+    style="padding-top: max(0.75rem, env(safe-area-inset-top, 0px)); padding-bottom: max(6rem, calc(4.5rem + env(safe-area-inset-bottom, 0px)));"
+  >
+    
+    <!-- Top Navigation Return (No Print) -->
+    {% if not is_public %}
+    <div class="max-w-5xl mx-auto mb-3 no-print flex justify-between items-center">
+      <a href="{% url 'clients' %}" class="inline-flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-3.5 py-2 rounded-xl border border-gray-300 font-semibold text-sm shadow-sm transition active:scale-95">
+        <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        <span>Volver a Clientes</span>
+      </a>
+      <a href="{% url 'dashboard' %}" class="inline-flex items-center gap-1.5 text-xs text-blue-600 font-bold hover:underline bg-white px-3.5 py-2 rounded-xl border border-gray-200 shadow-sm">
+        <span>Panel Principal</span>
+      </a>
+    </div>
+    {% endif %}
+
+    <!-- Messages / Alerts -->
+    {% if messages %}
+    <div class="max-w-5xl mx-auto mb-4 no-print space-y-2">
+      {% for message in messages %}
+      <div class="p-4 rounded-xl text-sm font-semibold shadow-sm flex items-center justify-between {% if message.tags == 'error' %}bg-red-50 text-red-800 border border-red-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
+        <span>{{ message }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Main Container (Interactive Workspace) -->
     <div
       id="statement-container"
-      class="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-xl print-container"
+      class="max-w-5xl mx-auto bg-white p-4 sm:p-6 md:p-8 rounded-2xl md:rounded-3xl shadow-xl print-container border border-slate-200/90"
     >
-      <!-- Header -->
-      <div class="flex justify-between items-start mb-8 border-b pb-8">
+      <!-- Top Title & Status Banner -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-4 border-b border-slate-100">
         <div>
-          <h1 class="text-3xl font-bold text-gray-800">Estado de Cuenta</h1>
-          <p class="text-gray-500">Fecha: {{ now|date:"d/m/Y H:i" }}</p>
-
-          <div class="mt-4 no-print flex flex-wrap gap-2">
-            {% if not is_public %}
-            <!-- Add Payment Button trigger -->
-            <a
-              href="{% url 'add_payment' client.id %}"
-              class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-bold text-sm shadow inline-flex items-center gap-2"
-            >
-              <span>$</span> Registrar Pago
-            </a>
-            {% endif %}
-            <button
-              onclick="downloadImage()"
-              class="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-black transition font-bold text-sm shadow inline-flex items-center gap-2"
-            >
-              <span>📲</span> Generar Imagen
-            </button>
-          </div>
-        </div>
-        <div class="text-right">
-          <h2 class="text-xl font-bold text-gray-700">{{ client.name }}</h2>
-          <p class="text-gray-500">{{ client.phone }}</p>
-          <div class="mt-2 text-right">
-            <span class="block text-xs uppercase text-gray-400"
-              >Saldo Actual</span
-            >
-            <span
-              class="text-3xl font-bold {% if current_debt > 0 %}text-red-500{% else %}text-green-500{% endif %}"
-            >
-              ${{ current_debt|intcomma }}
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Estado de Cuenta</h1>
+            {% if current_debt == 0 %}
+            <span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-xs font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              Al Día
             </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 bg-rose-50 text-rose-700 text-xs font-bold px-2.5 py-0.5 rounded-full border border-rose-200">
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+              Saldo Pendiente
+            </span>
+            {% endif %}
+          </div>
+          <p class="text-slate-400 text-xs mt-0.5">Fecha de corte: {{ now|date:"d/m/Y H:i" }}</p>
+        </div>
+      </div>
+
+      <!-- Executive Client & Balance Card (Mobile-First Hero) -->
+      <div class="mt-4 mb-5 bg-gradient-to-br from-slate-900 via-slate-850 to-slate-800 text-white rounded-2xl p-4 sm:p-6 shadow-md border border-slate-800 relative overflow-hidden">
+        <!-- Subtle background glow -->
+        <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-brand-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+          <!-- Client Information -->
+          <div class="flex items-center gap-3.5">
+            <div class="w-12 h-12 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center font-black text-lg text-white tracking-wider flex-shrink-0 shadow-inner">
+              {{ client.name|slice:":2"|upper }}
+            </div>
+            <div>
+              <div class="text-[10px] uppercase font-bold text-slate-400 tracking-widest">Titular de la cuenta</div>
+              <h2 class="text-lg sm:text-xl font-black text-white leading-tight">{{ client.name }}</h2>
+              <div class="flex items-center gap-2 mt-0.5 text-xs text-slate-300">
+                {% if client.phone %}
+                <span class="font-mono">{{ client.phone }}</span>
+                <span class="text-slate-500">•</span>
+                <a href="https://wa.me/57{{ client.phone }}" target="_blank" class="text-emerald-400 hover:text-emerald-300 font-semibold inline-flex items-center gap-1">
+                  <span>Contactar</span>
+                </a>
+                {% else %}
+                <span class="text-slate-400 italic">Sin teléfono</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <!-- Balance KPI -->
+          <div class="pt-3 md:pt-0 border-t md:border-t-0 border-white/10 flex md:flex-col justify-between md:items-end items-center">
+            <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Saldo Exigible Total</span>
+            <div class="text-right">
+              <div class="text-2xl sm:text-3xl md:text-4xl font-black {% if current_debt > 0 %}text-rose-400{% else %}text-emerald-400{% endif %}">
+                ${{ current_debt|intcomma }}
+              </div>
+              {% if credit_balance > 0 %}
+              <span class="inline-block text-xs font-semibold text-emerald-300 mt-0.5 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                Saldo a favor: +${{ credit_balance|intcomma }}
+              </span>
+              {% endif %}
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Pending Sales Table -->
-      <div class="overflow-x-auto mt-4">
-        <table class="w-full text-left text-sm">
-          <thead class="bg-gray-50 border-b-2 border-gray-300">
-            <tr class="text-gray-600 uppercase tracking-wider text-xs">
-              <th class="py-3 px-3 w-28">Emisión</th>
-              <th class="py-3 px-3">Comprobante</th>
-              <th class="py-3 px-3 text-right">Valor Original</th>
-              <th class="py-3 px-3 text-right">Abonado</th>
-              <th class="py-3 px-3 text-right text-red-600 font-bold w-32">Falta</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100 bg-white">
-            {% for sale in pending_sales %}
-            <tr class="hover:bg-gray-50 transition" x-data="{ expanded: false }">
-              <td class="py-3 px-3 align-top text-gray-500 text-xs">
-                {{ sale.date|date:"d/m/Y" }}<br/>
-                <span class="text-gray-400">{{ sale.date|date:"H:i" }}</span>
-              </td>
-              <td class="py-3 px-3 align-top">
-                <div class="font-bold text-gray-700">Factura #{{ sale.id }}</div>
-                
-                {% if sale.items.all %}
-                <details class="mt-1 no-print">
-                  <summary class="text-xs text-blue-600 flex items-center gap-1 hover:text-blue-800 cursor-pointer select-none">
-                    Ver items ({{ sale.items.count }}) <span class="text-[10px]">▼</span>
-                  </summary>
-                  <div class="mt-1 bg-gray-50 border border-gray-200 rounded p-2 text-[11px] text-gray-600 shadow-sm">
-                    {% for item in sale.items.all %}
-                    <div class="flex justify-between border-b border-gray-100 last:border-0 py-1">
-                      <span>{{ item.quantity }}x {{ item.product.name|truncatechars:25 }}</span>
-                      <span class="font-bold">${{ item.subtotal|intcomma }}</span>
-                    </div>
-                    {% endfor %}
-                  </div>
-                </details>
-                {% endif %}
+      <!-- Action Buttons Grid (Mobile Friendly) -->
+      <div class="no-print grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-6">
+        {% if not is_public %}
+        <!-- Add Payment Button -->
+        <a
+          href="{% url 'add_payment' client.id %}"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3.5 rounded-xl shadow-xs text-xs sm:text-sm flex items-center justify-center gap-2 active:scale-95 transition"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6"/></svg>
+          <span>Registrar Abono</span>
+        </a>
 
-                {% if sale.amount_paid > 0 %}
-                <button @click="expanded = !expanded" class="text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 px-2 py-1 rounded transition mt-1 flex items-center gap-1 no-print">
-                  <span x-text="expanded ? 'Ocultar Abonos' : 'Ver Detalle Abonos'"></span>
-                </button>
+        <!-- Adjust Balance Modal Button -->
+        <button
+          type="button"
+          @click="showAdjustModal = true"
+          class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 px-3.5 rounded-xl shadow-xs text-xs sm:text-sm flex items-center justify-center gap-2 active:scale-95 transition"
+          title="Registrar saldo anterior o ajuste contable"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+          <span>Ajuste de Cartera</span>
+        </button>
+        {% endif %}
+
+        <!-- Generate Formal Image Button -->
+        <button
+          type="button"
+          @click="downloadFormalImage()"
+          :disabled="isGeneratingImg"
+          class="bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 px-3.5 rounded-xl shadow-xs text-xs sm:text-sm flex items-center justify-center gap-2 active:scale-95 transition disabled:opacity-50"
+        >
+          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <span x-text="isGeneratingImg ? 'Generando imagen...' : 'Descargar Imagen'"></span>
+        </button>
+      </div>
+
+      <!-- Paz y Salvo Alert Banner if balance is 0 -->
+      {% if current_debt == 0 %}
+      <div class="mb-6 bg-emerald-50 border border-emerald-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shadow-xs flex-shrink-0">
+            ✓
+          </div>
+          <div>
+            <h3 class="text-sm sm:text-base font-extrabold text-emerald-950">Cuenta en Paz y Salvo</h3>
+            <p class="text-xs text-emerald-700 mt-0.5">
+              El cliente se encuentra al día. Todos sus créditos comerciales han sido cancelados.
+            </p>
+          </div>
+        </div>
+        <div class="text-right flex-shrink-0">
+          <span class="inline-block bg-white text-emerald-800 border border-emerald-300 font-extrabold text-xs px-3 py-1 rounded-xl shadow-xs">
+            Certificado Listo
+          </span>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Pending Invoices Section -->
+      <div class="mt-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+            <span>Cuentas con Saldo Pendiente</span>
+            {% if pending_sales %}
+            <span class="text-xs bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full font-bold">
+              {{ pending_sales|length }}
+            </span>
+            {% endif %}
+          </h3>
+          <span class="text-[11px] text-slate-400">Distribución de pagos por antigüedad (FIFO)</span>
+        </div>
+
+        <!-- MOBILE CARDS VIEW (Visible only on small screens) -->
+        <div class="sm:hidden space-y-3">
+          {% for sale in pending_sales %}
+          <div class="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-xs" x-data="{ expanded: false, showItems: false }">
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <div class="flex items-center gap-1.5">
+                {% if sale.is_adjustment %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                  Ajuste #{{ sale.id }}
+                </span>
+                {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                  Factura #{{ sale.id }}
+                </span>
                 {% endif %}
-                
-                <div x-show="expanded" style="display: none" class="mt-2 text-xs border border-gray-100 rounded bg-gray-50 p-2">
-                   <ul>
-                      {% for alloc in sale.allocations.all %}
-                        {% if not alloc.payment.is_annulled %}
-                        <li class="flex justify-between items-center text-gray-500 border-b border-gray-200 last:border-b-0 py-1">
-                          <div class="flex items-center gap-2">
-                             <span>Pago {{ alloc.payment.date|date:"d/m/y" }}</span>
-                             {% if not is_public %}
-                             <form action="{% url 'annul_payment' alloc.payment.id %}" method="POST" class="inline no-print" onsubmit="return confirm('¿Está seguro de anular este abono? Se reversará este monto de la factura.');">
-                                 {% csrf_token %}
-                                 <button type="submit" class="text-[10px] text-red-500 hover:text-red-700 font-bold bg-red-50 hover:bg-red-100 px-1 py-0.5 rounded transition border border-red-100">
-                                   ✖ Anular
-                                 </button>
-                             </form>
-                             {% endif %}
-                          </div>
-                          <span class="font-bold text-green-600">+${{ alloc.amount|intcomma }}</span>
-                        </li>
-                        {% endif %}
+                <span class="text-[11px] text-slate-400 font-medium">{{ sale.date|date:"d/m/Y H:i" }}</span>
+              </div>
+              <a href="{% url 'invoice_detail' sale.id %}" class="text-xs text-blue-600 font-bold hover:underline flex items-center gap-0.5">
+                Ver detalle &rarr;
+              </a>
+            </div>
+
+            {% if sale.note %}
+            <div class="text-xs text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-100 mb-2.5">
+              <span class="font-semibold text-slate-400 text-[10px] uppercase block">Concepto:</span>
+              <p class="font-medium text-slate-800">{{ sale.note }}</p>
+            </div>
+            {% endif %}
+
+            {% if sale.items.all %}
+            <div class="mb-2.5">
+              <button @click="showItems = !showItems" type="button" class="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1">
+                <span x-text="showItems ? 'Ocultar artículos ({{ sale.items.count }})' : 'Ver artículos ({{ sale.items.count }})'"></span>
+                <svg :class="showItems ? 'rotate-180' : ''" class="w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+              <div x-show="showItems" style="display: none;" class="mt-1.5 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-600 space-y-1">
+                {% for item in sale.items.all %}
+                <div class="flex justify-between border-b border-slate-100 last:border-0 py-1">
+                  <span>{{ item.quantity }}x {{ item.product.name }}</span>
+                  <span class="font-bold text-slate-700">${{ item.subtotal|intcomma }}</span>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+
+            <!-- 3-Column Metrics Breakdown -->
+            <div class="grid grid-cols-3 gap-2 py-2.5 px-3 bg-slate-50 rounded-xl border border-slate-100 text-center items-center">
+              <div>
+                <span class="block text-[10px] uppercase font-bold text-slate-400">Original</span>
+                <span class="font-bold text-slate-700 text-xs">${{ sale.total|intcomma }}</span>
+              </div>
+              <div class="border-x border-slate-200">
+                <span class="block text-[10px] uppercase font-bold text-slate-400">Abonado</span>
+                <span class="font-bold text-emerald-600 text-xs">${{ sale.amount_paid|intcomma }}</span>
+              </div>
+              <div>
+                <span class="block text-[10px] uppercase font-extrabold text-rose-500">Falta</span>
+                <span class="font-black text-rose-600 text-sm">${{ sale.pending_balance|intcomma }}</span>
+              </div>
+            </div>
+
+            {% if sale.amount_paid > 0 %}
+            <!-- Visual Amortization Bar & Abonos Trace -->
+            <div class="mt-2.5 bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-2.5">
+              <div class="flex items-center justify-between text-[11px] mb-1.5">
+                <span class="font-bold text-emerald-900 flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  {% widthratio sale.amount_paid sale.total 100 %}% amortizado
+                </span>
+                <span class="text-slate-500 font-medium text-[10px]">
+                  Pagado <strong class="text-emerald-700">${{ sale.amount_paid|intcomma }}</strong> de ${{ sale.total|intcomma }}
+                </span>
+              </div>
+              <div class="w-full bg-slate-200/90 rounded-full h-1.5 overflow-hidden mb-2">
+                <div class="bg-gradient-to-r from-emerald-500 to-teal-500 h-1.5 rounded-full" style="width: {% widthratio sale.amount_paid sale.total 100 %}%;"></div>
+              </div>
+
+              <div class="space-y-1.5">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-emerald-800">Abonos recibidos en esta cuenta:</span>
+                {% for alloc in sale.allocations.all %}
+                {% if not alloc.payment.is_annulled %}
+                <div class="flex items-center justify-between text-xs bg-white border border-emerald-200 rounded-lg px-2.5 py-1.5 shadow-2xs">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="font-black text-emerald-600">+${{ alloc.amount|intcomma }}</span>
+                    <span class="text-[11px] text-slate-500">el {{ alloc.payment.date|date:"d/m/Y H:i" }}</span>
+                    <span class="text-[10px] bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded border border-slate-200">Recibo #{{ alloc.payment.id }}</span>
+                  </div>
+                  {% if not is_public %}
+                  <form action="{% url 'annul_payment' alloc.payment.id %}" method="POST" class="inline" onsubmit="return confirm('¿Está seguro de anular este abono de ${{ alloc.amount|intcomma }}? Se reactivará el saldo pendiente.');">
+                    {% csrf_token %}
+                    <button type="submit" title="Anular abono" class="text-[10px] text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 px-2 py-0.5 rounded font-bold transition">
+                      ✕ Anular
+                    </button>
+                  </form>
+                  {% endif %}
+                </div>
+                {% endif %}
+                {% endfor %}
+              </div>
+            </div>
+            {% else %}
+            <div class="mt-2 text-[11px] text-slate-400 italic bg-slate-50 py-1.5 px-2.5 rounded-lg border border-slate-100 flex items-center gap-1.5">
+              <span>ℹ️</span> Sin abonos registrados aún para esta factura.
+            </div>
+            {% endif %}
+          </div>
+          {% empty %}
+          <div class="p-8 text-center text-slate-400 bg-slate-50 rounded-2xl border border-slate-200">
+            <span class="text-3xl block mb-1">🎉</span>
+            <p class="font-bold text-slate-700 text-sm">¡Cuenta al día!</p>
+            <p class="text-xs text-slate-400 mt-0.5">No hay facturas con saldo pendiente de pago.</p>
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- DESKTOP TABLE VIEW (Visible on tablet & desktop) -->
+        <div class="hidden sm:block overflow-x-auto border border-slate-200 rounded-xl">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-50 border-b border-slate-200">
+              <tr class="text-slate-600 uppercase tracking-wider text-[11px]">
+                <th class="py-3 px-3.5 w-28">Emisión</th>
+                <th class="py-3 px-3.5">Comprobante / Detalle</th>
+                <th class="py-3 px-3.5 text-right">Valor Original</th>
+                <th class="py-3 px-3.5 text-right">Abonado</th>
+                <th class="py-3 px-3.5 text-right text-rose-600 font-bold w-32">Falta</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 bg-white">
+              {% for sale in pending_sales %}
+              <tr class="hover:bg-slate-50/80 transition">
+                <td class="py-3 px-3.5 align-top text-slate-500 text-xs">
+                  {{ sale.date|date:"d/m/Y" }}<br/>
+                  <span class="text-slate-400">{{ sale.date|date:"H:i" }}</span>
+                </td>
+                <td class="py-3 px-3.5 align-top">
+                  <div class="flex items-center gap-1.5">
+                    {% if sale.is_adjustment %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                      Ajuste #{{ sale.id }}
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                      Factura #{{ sale.id }}
+                    </span>
+                    {% endif %}
+                    <a href="{% url 'invoice_detail' sale.id %}" class="text-xs text-blue-600 font-semibold hover:underline">
+                      Ver &rarr;
+                    </a>
+                  </div>
+                  
+                  {% if sale.note %}
+                  <p class="text-xs text-slate-700 font-medium mt-1 bg-slate-50 p-1.5 rounded border border-slate-100">{{ sale.note }}</p>
+                  {% endif %}
+
+                  {% if sale.items.all %}
+                  <details class="mt-1 no-print">
+                    <summary class="text-xs text-blue-600 flex items-center gap-1 hover:text-blue-800 cursor-pointer select-none">
+                      Ver items ({{ sale.items.count }}) <span class="text-[10px]">▼</span>
+                    </summary>
+                    <div class="mt-1 bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-[11px] text-slate-600 shadow-xs">
+                      {% for item in sale.items.all %}
+                      <div class="flex justify-between border-b border-slate-100 last:border-0 py-1">
+                        <span>{{ item.quantity }}x {{ item.product.name|truncatechars:25 }}</span>
+                        <span class="font-bold">${{ item.subtotal|intcomma }}</span>
+                      </div>
                       {% endfor %}
-                   </ul>
-                </div>
-              </td>
-              <td class="py-3 px-3 align-top text-right text-gray-400 font-medium">
-                ${{ sale.total|intcomma }}
-              </td>
-              <td class="py-3 px-3 align-top text-right text-green-600 font-bold">
-                ${{ sale.amount_paid|intcomma }}
-              </td>
-              <td class="py-3 px-3 align-top text-right font-bold text-red-500 text-lg">
-                ${{ sale.pending_balance|intcomma }}
-              </td>
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="5" class="py-12 text-center text-gray-400">
-                <div class="flex flex-col items-center justify-center">
-                  <span class="text-4xl mb-2">🎉</span>
-                  <p class="font-bold text-gray-600">Cuenta al día</p>
-                  <p class="text-xs mt-1">No hay deuda activa pendiente.</p>
-                </div>
-              </td>
-             </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+                    </div>
+                  </details>
+                  {% endif %}
+
+                  {% if sale.amount_paid > 0 %}
+                  <!-- Visual Payment Tracking on Desktop Row -->
+                  <div class="mt-2 bg-emerald-50/70 border border-emerald-100 rounded-lg p-2 max-w-md">
+                    <div class="flex items-center justify-between text-[10px] font-bold text-emerald-900 mb-1">
+                      <span class="flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        {% widthratio sale.amount_paid sale.total 100 %}% amortizado
+                      </span>
+                      <span class="text-emerald-700">${{ sale.amount_paid|intcomma }} / ${{ sale.total|intcomma }}</span>
+                    </div>
+                    <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden mb-1.5">
+                      <div class="bg-gradient-to-r from-emerald-500 to-teal-500 h-1.5 rounded-full" style="width: {% widthratio sale.amount_paid sale.total 100 %}%;"></div>
+                    </div>
+                    
+                    <div class="space-y-1">
+                      {% for alloc in sale.allocations.all %}
+                      {% if not alloc.payment.is_annulled %}
+                      <div class="flex items-center justify-between text-[11px] bg-white border border-emerald-200 rounded px-2 py-1 shadow-2xs">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                          <span class="font-extrabold text-emerald-700">+${{ alloc.amount|intcomma }}</span>
+                          <span class="text-slate-500 text-[10px]">{{ alloc.payment.date|date:"d/m/Y H:i" }}</span>
+                          <span class="text-[9.5px] bg-slate-100 text-slate-700 px-1 rounded font-bold border border-slate-200">Recibo #{{ alloc.payment.id }}</span>
+                        </div>
+                        {% if not is_public %}
+                        <form action="{% url 'annul_payment' alloc.payment.id %}" method="POST" class="inline no-print" onsubmit="return confirm('¿Está seguro de anular este abono de ${{ alloc.amount|intcomma }}?');">
+                          {% csrf_token %}
+                          <button type="submit" title="Anular este abono" class="text-[9.5px] text-rose-600 hover:text-white hover:bg-rose-600 px-1.5 py-0.5 rounded border border-rose-200 font-bold transition">
+                            ✖ Anular
+                          </button>
+                        </form>
+                        {% endif %}
+                      </div>
+                      {% endif %}
+                      {% endfor %}
+                    </div>
+                  </div>
+                  {% endif %}
+                </td>
+                <td class="py-3 px-3.5 align-top text-right text-slate-500 font-semibold">
+                  ${{ sale.total|intcomma }}
+                </td>
+                <td class="py-3 px-3.5 align-top text-right">
+                  {% if sale.amount_paid > 0 %}
+                    <span class="font-extrabold text-emerald-600 text-sm block">${{ sale.amount_paid|intcomma }}</span>
+                    <span class="inline-block text-[10px] font-bold text-emerald-800 bg-emerald-100/80 border border-emerald-200 px-1.5 py-0.5 rounded-full uppercase mt-1">
+                      {% widthratio sale.amount_paid sale.total 100 %}% pagado
+                    </span>
+                  {% else %}
+                    <span class="text-slate-400 font-medium text-xs">$0</span>
+                  {% endif %}
+                </td>
+                <td class="py-3 px-3.5 align-top text-right font-black text-rose-600 text-base">
+                  ${{ sale.pending_balance|intcomma }}
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="py-12 text-center text-slate-400 bg-white">
+                  <div class="flex flex-col items-center justify-center">
+                    <span class="text-4xl mb-2">🎉</span>
+                    <p class="font-extrabold text-slate-700 text-base">¡Cuenta al día!</p>
+                    <p class="text-xs text-slate-400 mt-0.5">No hay facturas con saldo pendiente de pago.</p>
+                  </div>
+                </td>
+               </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
       
       {% if not is_public and recent_payments %}
       <!-- Recents Payments Section (Admin Only) -->
-      <div class="mt-4 no-print" x-data="{ showAbonos: false }">
+      <div class="mt-6 no-print" x-data="{ showAbonos: false }">
         <button
           @click="showAbonos = !showAbonos"
-          class="flex items-center gap-2 text-green-700 font-bold hover:text-green-800 transition w-full justify-between bg-green-50/50 p-3 rounded-lg border border-green-100"
+          class="flex items-center gap-2 text-emerald-800 font-bold hover:text-emerald-900 transition w-full justify-between bg-emerald-50/70 p-3.5 rounded-2xl border border-emerald-200 shadow-xs"
         >
           <span class="flex items-center gap-2 uppercase text-xs tracking-wider">
-            💸 Ver Historial Reciente de Abonos (Para Anulaciones)
+            <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+            <span>Ver Historial Reciente de Abonos Registrados</span>
+            <span class="text-xs bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+              {{ recent_payments|length }}
+            </span>
           </span>
-          <svg :class="showAbonos ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          <svg :class="showAbonos ? 'rotate-180' : ''" class="w-4 h-4 transition-transform text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
         </button>
 
-        <div x-show="showAbonos" style="display: none" class="mt-2 transition-all p-3 bg-white border border-green-100 rounded-lg shadow-sm">
-          <div class="grid gap-2">
+        <div x-show="showAbonos" style="display: none" class="mt-2 transition-all p-3 sm:p-4 bg-white border border-emerald-100 rounded-2xl shadow-sm">
+          <div class="space-y-2.5">
             {% for payment in recent_payments %}
-            <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0 {% if payment.is_annulled %}opacity-50 grayscale{% endif %}">
-                <div>
-                    <span class="text-[11px] text-gray-500 block">{{ payment.date|date:"d/m/Y H:i" }}</span>
-                    <span class="font-bold text-gray-700 text-sm block">Abono General Registrado</span>
-                    <span class="text-[11px] text-gray-400 block">{{ payment.note|default:"Ingreso a caja" }}</span>
+            <div class="p-3 bg-slate-50/80 border border-slate-200/80 rounded-xl transition hover:border-emerald-200 {% if payment.is_annulled %}opacity-50 grayscale{% endif %}">
+                <div class="flex justify-between items-start gap-2">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-800 text-sm">Recibo de Abono #{{ payment.id }}</span>
+                            <span class="text-[11px] text-slate-400 font-medium">{{ payment.date|date:"d/m/Y H:i" }}</span>
+                        </div>
+                        <span class="text-xs text-slate-500 block mt-0.5">{{ payment.note|default:"Ingreso a caja" }}</span>
+                    </div>
+                    <div class="text-right flex items-center gap-2 flex-shrink-0">
+                        <span class="font-black text-emerald-600 text-base sm:text-lg">+${{ payment.amount|intcomma }}</span>
+                        {% if not payment.is_annulled %}
+                        <form action="{% url 'annul_payment' payment.id %}" method="POST" class="inline" onsubmit="return confirm('¿Está seguro de anular este abono de ${{ payment.amount|intcomma }}? El dinero reactivará las deudas del cliente.');">
+                            {% csrf_token %}
+                            <button type="submit" class="text-[11px] bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white border border-rose-200 px-2.5 py-1 rounded-lg transition font-bold shadow-xs">
+                                Anular
+                            </button>
+                        </form>
+                        {% else %}
+                            <span class="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Anulado</span>
+                        {% endif %}
+                    </div>
                 </div>
-                <div class="text-right flex items-center gap-3">
-                    <span class="font-bold text-green-600">+${{ payment.amount|intcomma }}</span>
-                    {% if not payment.is_annulled %}
-                    <form action="{% url 'annul_payment' payment.id %}" method="POST" class="inline" onsubmit="return confirm('¿Está seguro de anular este abono? El dinero devuelto hará que las facturas queden pendientes nuevamente.');">
-                        {% csrf_token %}
-                        <button type="submit" class="text-[10px] bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded transition font-bold shadow-sm uppercase tracking-wider">
-                            ✖ Anular
-                        </button>
-                    </form>
-                    {% else %}
-                        <span class="text-[10px] bg-gray-200 text-gray-500 px-2 py-1 rounded font-bold uppercase tracking-wider">Anulado</span>
-                    {% endif %}
+
+                <!-- Trace of Invoices/Adjustments amortized by this payment -->
+                <div class="mt-2 pt-2 border-t border-slate-200/60 flex flex-wrap items-center gap-1.5 text-xs">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                      <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                      Aplicado a:
+                    </span>
+                    {% for alloc in payment.allocations.all %}
+                    <span class="inline-flex items-center gap-1 bg-emerald-100/70 border border-emerald-300 text-emerald-900 text-[11px] font-semibold px-2 py-0.5 rounded-md">
+                      <span>{% if alloc.sale.is_adjustment %}Ajuste #{{ alloc.sale.id }}{% else %}Factura #{{ alloc.sale.id }}{% endif %}:</span>
+                      <strong class="text-emerald-800">+${{ alloc.amount|intcomma }}</strong>
+                    </span>
+                    {% empty %}
+                    <span class="text-[10px] text-slate-400 italic">Abono general a cartera</span>
+                    {% endfor %}
                 </div>
             </div>
             {% endfor %}
@@ -212,81 +525,65 @@
       </div>
       {% endif %}
 
-
-
       <!-- History Section (Admin Only) -->
       {% if history_timeline %}
       <div
-        class="mt-8 no-print border-t border-gray-200 pt-6"
+        class="mt-4 no-print border-t border-slate-100 pt-4"
         x-data="{ showHistory: false }"
       >
         <button
           @click="showHistory = !showHistory"
-          class="flex items-center gap-2 text-gray-500 font-bold hover:text-gray-700 transition w-full justify-between bg-gray-50 p-3 rounded-lg"
+          class="flex items-center gap-2 text-slate-600 font-bold hover:text-slate-800 transition w-full justify-between bg-slate-50 p-3.5 rounded-2xl border border-slate-200 shadow-xs"
         >
-          <span class="flex items-center gap-2">
-            🕒 Ver Historial Anterior (Saldado)
-            <span class="text-sm font-normal text-gray-400"
-              >({{ history_timeline|length }} movimientos)</span
-            >
+          <span class="flex items-center gap-2 text-xs uppercase tracking-wider">
+            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span>Historial Anterior Totalmente Saldado</span>
+            <span class="text-xs font-normal text-slate-400">({{ history_timeline|length }} movimientos)</span>
           </span>
           <svg
             :class="showHistory ? 'rotate-180' : ''"
-            class="w-5 h-5 transition-transform"
+            class="w-4 h-4 transition-transform text-slate-500"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M19 9l-7 7-7-7"
-            ></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
           </svg>
         </button>
 
         <div
           x-show="showHistory"
           style="display: none"
-          class="mt-4 transition-all"
+          class="mt-2.5 transition-all"
         >
-          <div class="overflow-x-auto opacity-75">
-            <table class="w-full text-left text-sm grayscale">
-              <thead class="bg-gray-100 border-b-2 border-gray-300">
-                <tr class="text-gray-500 uppercase tracking-wider text-xs">
-                  <th class="py-2 px-3 w-24">Fecha</th>
-                  <th class="py-2 px-3">Movimiento</th>
-                  <th class="py-2 px-3 w-32">Comentario</th>
-                  <th class="py-2 px-3 text-right w-32">Monto</th>
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-left text-xs bg-white">
+              <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th class="py-2.5 px-3 w-28">Fecha</th>
+                  <th class="py-2.5 px-3">Comprobante</th>
+                  <th class="py-2.5 px-3">Detalle</th>
+                  <th class="py-2.5 px-3 text-right">Monto</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-gray-100 bg-gray-50">
+              <tbody class="divide-y divide-slate-100 text-slate-600">
                 {% for event in history_timeline reversed %}
                 <tr>
-                  <td
-                    class="py-2 px-3 whitespace-nowrap align-top text-gray-400 text-xs"
-                  >
-                    {{ event.date|date:"d/m/Y" }}
+                  <td class="py-2 px-3 whitespace-nowrap text-slate-400">
+                    {{ event.date|date:"d/m/Y H:i" }}
                   </td>
-                  <td class="py-2 px-3 align-top text-gray-500">
-                    <span class="font-bold block">{{ event.ref }}</span>
-                    <span class="text-xs block">
-                      {% if event.type == 'SALE' %}COMPRA{% elif event.type == 'ANNULMENT' %}ANULACIÓN{% else %}ABONO{% endif %}
-                    </span>
+                  <td class="py-2 px-3 font-bold text-slate-700">
+                    {{ event.ref }}
                   </td>
-                  <td class="py-2 px-3 align-top text-xs text-gray-400 italic">
-                    {{ event.object.note|default:""|truncatechars:30 }}
+                  <td class="py-2 px-3 text-slate-500 italic">
+                    {{ event.object.note|default:""|truncatechars:35 }}
                   </td>
-                  <td class="py-2 px-3 text-right align-top text-gray-500">
+                  <td class="py-2 px-3 text-right font-semibold">
                     {% if event.type == 'SALE' %}
-                    <span class="{% if event.is_annulled %}line-through text-gray-300{% endif %}">+${{ event.amount|intcomma }}</span>
+                    <span class="text-slate-700">+${{ event.amount|intcomma }}</span>
                     {% else %}
-                    <span class="">-${{ event.amount|intcomma }}</span>
+                    <span class="text-emerald-600">-${{ event.amount|intcomma }}</span>
                     {% endif %}
-                    <div class="text-xs text-gray-400">
-                      Saldo: ${{ event.balance|intcomma }}
-                    </div>
                   </td>
                 </tr>
                 {% endfor %}
@@ -297,93 +594,391 @@
       </div>
       {% endif %}
 
-      <!-- Footer Signatures -->
-      <div
-        class="mt-16 pt-8 border-t border-gray-200 grid grid-cols-2 gap-16 no-print"
-      >
-        <div></div>
-        <div class="text-center pt-8 border-t border-gray-400">
-          <p class="font-bold text-gray-600">Firma Cliente</p>
-          <p class="text-xs text-gray-400 mt-1">
-            Acepto el saldo pendiente mostrado arriba.
-          </p>
+      <!-- Footer Signatures (Print only) -->
+      <div class="mt-12 pt-6 border-t border-gray-300 hidden print:grid grid-cols-2 gap-12 text-center text-xs">
+        <div class="pt-8 border-t border-gray-400">
+          <p class="font-bold text-gray-700">FleasoDaPos Papelería</p>
+          <p class="text-gray-400 mt-0.5">Firma Autorizada</p>
+        </div>
+        <div class="pt-8 border-t border-gray-400">
+          <p class="font-bold text-gray-700">{{ client.name }}</p>
+          <p class="text-gray-400 mt-0.5">Firma de Aceptación y Conformidad</p>
         </div>
       </div>
     </div>
 
-    <!-- Payment Modal Removed (Moved to separate page) -->
+    <!-- Modal for Adjust Balance / Saldo Inicial (Admin Only) -->
+    {% if not is_public %}
+    <div 
+      x-show="showAdjustModal" 
+      style="display: none;"
+      class="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+      @keydown.escape.window="showAdjustModal = false"
+    >
+      <div 
+        @click.away="showAdjustModal = false"
+        class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 transition-all"
+      >
+        <div class="flex items-center justify-between border-b pb-3 mb-4">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">⚖️</span>
+            <h3 class="text-lg font-extrabold text-gray-800">Ajuste de Cartera / Saldo</h3>
+          </div>
+          <button @click="showAdjustModal = false" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+        </div>
 
-    <!-- Floating Controls -->
+        <p class="text-xs text-gray-500 mb-4">
+          Usa esta opción para registrar un saldo inicial (de libreta anterior) o un ajuste contable al cliente <strong>{{ client.name }}</strong> sin necesidad de crear artículos ficticios en el inventario.
+        </p>
+
+        <form action="{% url 'adjust_client_balance' client.id %}" method="POST" class="space-y-4">
+          {% csrf_token %}
+          <div>
+            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Monto de Deuda a Cargar ($)</label>
+            <div class="relative">
+              <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span>
+              <input 
+                type="number" 
+                name="amount" 
+                class="w-full pl-8 p-3 border border-gray-300 rounded-xl font-extrabold text-lg text-gray-900 focus:outline-none focus:border-amber-500 shadow-inner" 
+                placeholder="Ej: 50000" 
+                min="1" 
+                required 
+              />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Concepto / Motivo del Saldo</label>
+            <input 
+              type="text" 
+              name="concept" 
+              class="w-full p-3 border border-gray-300 rounded-xl text-sm text-gray-800 focus:outline-none focus:border-amber-500" 
+              placeholder="Ej: Saldo anterior según libreta / Ajuste acordado" 
+              required 
+            />
+          </div>
+
+          <div class="flex justify-end gap-3 pt-3 border-t">
+            <button 
+              type="button" 
+              @click="showAdjustModal = false" 
+              class="px-4 py-2 font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              class="px-5 py-2 font-extrabold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-md text-xs active:scale-95 transition"
+            >
+              Registrar Saldo
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ========================================================================= -->
+    <!-- FORMAL STATEMENT DOCUMENT FOR IMAGE EXPORT (HIDDEN OFFSCREEN, HIGH FIDELITY) -->
+    <!-- ========================================================================= -->
+    <div style="position: absolute; left: -9999px; top: 0;">
+      <div 
+        id="formal-statement-document" 
+        class="w-[850px] bg-white p-12 text-gray-800 font-sans shadow-none"
+        style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;"
+      >
+        <!-- Header with Business Brand -->
+        <div class="border-b-2 border-slate-800 pb-6 mb-6 flex justify-between items-start">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-2xl font-black text-slate-900 tracking-tight">FLEASODAPOS</span>
+              <span class="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-slate-300">Papelería & Comercio</span>
+            </div>
+            <p class="text-xs text-slate-500">Sistema Integral de Facturación y Control de Cartera</p>
+            <p class="text-xs text-slate-500 mt-1">Nit / Identificación: Régimen Comercial Simplificado</p>
+          </div>
+          <div class="text-right">
+            <h2 class="text-base font-black text-slate-900 uppercase tracking-wider">ESTADO DE CUENTA COMERCIAL</h2>
+            <p class="text-xs font-semibold text-slate-600 mt-0.5">Folio: EST-{{ client.id }}-{{ now|date:"YmdHi" }}</p>
+            <p class="text-xs text-slate-500">Fecha de Emisión: <strong>{{ now|date:"d/m/Y h:i A" }}</strong></p>
+          </div>
+        </div>
+
+        <!-- Client & Summary Card -->
+        <div class="grid grid-cols-3 gap-6 mb-8 bg-slate-50 border border-slate-200 rounded-xl p-5">
+          <div class="col-span-2 border-r border-slate-200 pr-4">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Datos del Titular</span>
+            <h3 class="text-xl font-black text-slate-900">{{ client.name|upper }}</h3>
+            <div class="text-xs text-slate-600 mt-2 space-y-1">
+              <p><strong>Teléfono / WhatsApp:</strong> {{ client.phone|default:"No registrado" }}</p>
+              <p><strong>Dirección:</strong> {{ client.address|default:"No registrada" }}</p>
+              <p><strong>Estado Actual:</strong> 
+                {% if current_debt == 0 %}
+                <span class="text-emerald-700 font-extrabold uppercase">✓ PAZ Y SALVO (AL DÍA)</span>
+                {% else %}
+                <span class="text-red-700 font-extrabold uppercase">OBLIGACIÓN PENDIENTE DE PAGO</span>
+                {% endif %}
+              </p>
+            </div>
+          </div>
+          <div class="flex flex-col justify-center items-center text-center pl-2">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">SALDO TOTAL AL CORTE</span>
+            <div class="text-3xl font-black {% if current_debt > 0 %}text-red-600{% else %}text-emerald-600{% endif %}">
+              ${{ current_debt|intcomma }}
+            </div>
+            <span class="text-[10px] text-slate-400 mt-1">Moneda legal (COP)</span>
+          </div>
+        </div>
+
+        <!-- Conditional: Paz y Salvo Certificate or Pending Invoices Table -->
+        {% if current_debt == 0 %}
+        <!-- Formal Paz y Salvo Certificate Box -->
+        <div class="my-8 border-2 border-emerald-500 bg-emerald-50/50 rounded-2xl p-8 text-center relative overflow-hidden">
+          <div class="w-16 h-16 mx-auto bg-emerald-600 text-white rounded-full flex items-center justify-center font-black text-2xl shadow-sm mb-3">
+            ✓
+          </div>
+          <h3 class="text-xl font-black text-emerald-950 uppercase tracking-wider">CERTIFICADO DE PAZ Y SALVO</h3>
+          <p class="text-sm text-emerald-900 max-w-xl mx-auto mt-2 leading-relaxed">
+            Hacemos constar formalmente que a la fecha y hora de emisión del presente documento, el(la) cliente 
+            <strong>{{ client.name|upper }}</strong> 
+            se encuentra totalmente a <strong>PAZ Y SALVO</strong> por todo concepto de compras a crédito y obligaciones comerciales con nuestro establecimiento.
+          </p>
+          <div class="mt-4 inline-block bg-white border border-emerald-300 text-emerald-800 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider">
+            Saldo Pendiente: $0 COP
+          </div>
+        </div>
+        {% else %}
+        <!-- Pending Invoices Breakdown Table -->
+        <div class="mb-6">
+          <h4 class="text-xs font-black uppercase tracking-wider text-slate-800 mb-2.5 flex items-center justify-between">
+            <span>Cuentas con Saldo Pendiente</span>
+            <span class="text-[11px] text-slate-500 font-semibold">Total Pendiente: ${{ current_debt|intcomma }}</span>
+          </h4>
+          <table class="w-full text-left text-xs border border-slate-200 rounded-lg overflow-hidden">
+            <thead class="bg-slate-100 text-slate-700 uppercase font-black text-[10px] tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="py-2.5 px-3">Fecha</th>
+                <th class="py-2.5 px-3">Comprobante</th>
+                <th class="py-2.5 px-3">Concepto / Detalle de Pagos</th>
+                <th class="py-2.5 px-3 text-right">Valor Original</th>
+                <th class="py-2.5 px-3 text-right text-emerald-700">Abonado</th>
+                <th class="py-2.5 px-3 text-right text-red-600">Saldo Pendiente</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 bg-white">
+              {% for sale in pending_sales %}
+              <tr>
+                <td class="py-2.5 px-3 text-slate-500 align-top">{{ sale.date|date:"d/m/Y" }}</td>
+                <td class="py-2.5 px-3 font-bold text-slate-900 align-top">
+                  {% if sale.is_adjustment %}
+                    <span class="inline-block bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-extrabold mr-1">AJUSTE</span>#{{ sale.id }}
+                  {% else %}
+                    <span class="inline-block bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-extrabold mr-1">FACTURA</span>#{{ sale.id }}
+                  {% endif %}
+                </td>
+                <td class="py-2.5 px-3 text-slate-700 align-top">
+                  <div class="font-medium text-slate-800">
+                    {% if sale.is_adjustment %}
+                      {{ sale.note|default:"Ajuste Contable de Cartera" }}
+                    {% elif sale.note %}
+                      {{ sale.note }}
+                    {% elif sale.items.all %}
+                      {{ sale.items.count }} item(s) comercial(es)
+                    {% else %}
+                      Venta a Crédito
+                    {% endif %}
+                  </div>
+
+                  <!-- Inline trace of Abonos on the image row -->
+                  {% if sale.amount_paid > 0 %}
+                  <div class="mt-1 bg-emerald-50/90 border border-emerald-200 rounded px-2 py-1 text-[10px] text-emerald-900">
+                    <span class="font-black text-emerald-800 uppercase tracking-wide mr-1">✓ Abonos aplicados:</span>
+                    {% for alloc in sale.allocations.all %}
+                      {% if not alloc.payment.is_annulled %}
+                      <span class="font-semibold text-emerald-950 inline-block mr-2">
+                        +${{ alloc.amount|intcomma }} el {{ alloc.payment.date|date:"d/m/Y" }} (Recibo #{{ alloc.payment.id }})
+                      </span>
+                      {% endif %}
+                    {% endfor %}
+                  </div>
+                  {% endif %}
+                </td>
+                <td class="py-2.5 px-3 text-right font-medium text-slate-600 align-top">${{ sale.total|intcomma }}</td>
+                <td class="py-2.5 px-3 text-right font-bold text-emerald-700 align-top">
+                  {% if sale.amount_paid > 0 %}
+                    <span class="block font-black text-emerald-700">${{ sale.amount_paid|intcomma }}</span>
+                    <span class="inline-block text-[9px] bg-emerald-100 text-emerald-800 font-black px-1.5 py-0.2 rounded uppercase mt-0.5">
+                      {% widthratio sale.amount_paid sale.total 100 %}% PAGO
+                    </span>
+                  {% else %}
+                    <span class="text-slate-400 font-normal">$0</span>
+                  {% endif %}
+                </td>
+                <td class="py-2.5 px-3 text-right font-black text-red-600 text-sm align-top">${{ sale.pending_balance|intcomma }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot class="bg-slate-50 font-black border-t-2 border-slate-300">
+              <tr>
+                <td colspan="5" class="py-2.5 px-3 text-right uppercase text-slate-700 tracking-wider text-[11px]">Total Cartera Pendiente:</td>
+                <td class="py-2.5 px-3 text-right text-red-600 text-base font-black">${{ current_debt|intcomma }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {% endif %}
+
+        <!-- Official Signatures & Footer -->
+        <div class="mt-12 pt-6 border-t-2 border-slate-200 grid grid-cols-2 gap-16 text-center text-xs">
+          <div class="pt-10 border-t border-slate-400">
+            <p class="font-black text-slate-900 uppercase tracking-wider">FLEASODAPOS</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">Firma Autorizada / Departamento Comercial</p>
+          </div>
+          <div class="pt-10 border-t border-slate-400">
+            <p class="font-black text-slate-900 uppercase tracking-wider">{{ client.name|upper }}</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">Firma de Conformidad del Titular</p>
+          </div>
+        </div>
+
+        <div class="mt-8 text-center border-t border-slate-100 pt-4 text-[10px] text-slate-400">
+          Documento expedido formalmente por FleasoDaPos como constancia de extracto y estado de cuenta comercial.
+        </div>
+      </div>
+    </div>
+
+    <!-- Floating Bottom Navigation Bar (Mobile Native Bar & Desktop Pill) -->
     {% if not is_public %}
     <div
-      class="fixed bottom-8 right-8 space-x-2 md:space-x-4 no-print flex items-center z-50"
+      class="fixed bottom-0 inset-x-0 sm:bottom-6 sm:inset-x-auto sm:right-6 z-40 bg-white/95 sm:bg-white/90 backdrop-blur-md border-t sm:border border-slate-200/80 shadow-2xl p-2.5 sm:px-4 sm:py-2 sm:rounded-2xl flex items-center justify-around sm:justify-end gap-2 no-print"
+      style="padding-bottom: max(0.65rem, env(safe-area-inset-bottom, 0px));"
     >
       <button
         onclick="history.back()"
-        class="bg-gray-500 text-white px-4 py-3 md:px-6 rounded-full shadow-lg hover:bg-gray-600 font-bold text-sm md:text-base"
+        class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm transition active:scale-95 flex items-center gap-1.5"
       >
-        Volver
+        <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        <span>Volver</span>
       </button>
 
       <!-- WhatsApp Link Button -->
       <a
-        href="https://wa.me/57{{ client.phone }}?text=Hola *{{ client.name }}*, te comparto tu estado de cuenta.%0A%0ATu saldo actual es: *${{ current_debt|intcomma }}*%0A%0APuedes ver el detalle aquí:%0A{{ request.scheme }}://{{ request.get_host }}{% url 'client_public_statement' client.id %}"
+        href="https://wa.me/57{{ client.phone }}?text=Hola *{{ client.name }}*, te comparto tu estado de cuenta oficial de FleasoDaPos.%0A%0A{% if current_debt == 0 %}🎉 *CUENTA EN PAZ Y SALVO* - Saldo: *$0*%0A{% else %}Tu saldo pendiente actual es: *${{ current_debt|intcomma }}*%0A{% endif %}%0APuedes consultar el detalle en línea aquí:%0A{{ request.scheme }}://{{ request.get_host }}{% url 'client_public_statement' client.id %}"
         target="_blank"
-        class="bg-green-500 text-white px-4 py-3 md:px-6 rounded-full shadow-lg hover:bg-green-600 font-bold flex items-center gap-2 text-sm md:text-base"
+        class="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-full font-bold flex items-center gap-1.5 text-xs sm:text-sm shadow-xs transition active:scale-95"
       >
-        <svg
-          class="w-5 h-5"
-          fill="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path
-            d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 4.671 7.426 10.999 8.019.558.077 2.059.207 3.321-.19 1.378-.432 2.768-1.651 3.194-2.854.425-1.203.425-2.234.297-2.455-.126-.222-.321-.421-.395-.545z"
-          />
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 4.671 7.426 10.999 8.019.558.077 2.059.207 3.321-.19 1.378-.432 2.768-1.651 3.194-2.854.425-1.203.425-2.234.297-2.455-.126-.222-.321-.421-.395-.545z"/>
         </svg>
-        Link
+        <span>WhatsApp</span>
       </a>
 
       <!-- PDF Button -->
       <a
         href="{% url 'client_statement_pdf' client.id %}"
-        class="bg-red-600 text-white px-4 py-3 md:px-6 rounded-full shadow-lg hover:bg-red-700 font-bold flex items-center gap-2 text-sm md:text-base"
+        class="bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-full font-bold flex items-center gap-1.5 text-xs sm:text-sm shadow-xs transition active:scale-95"
       >
-        📄 PDF
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+        <span>PDF</span>
       </a>
 
+      <!-- Print Button (Desktop only) -->
       <button
         onclick="window.print()"
-        class="bg-blue-600 text-white px-4 py-3 md:px-6 rounded-full shadow-lg hover:bg-blue-700 font-bold hidden md:block"
+        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full font-bold hidden md:flex items-center gap-1.5 text-xs shadow-xs transition active:scale-95"
       >
-        🖨️ Imprimir
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+        <span>Imprimir</span>
       </button>
     </div>
     {% else %}
-    <!-- Simplified controls for public -->
-    <div class="fixed bottom-8 right-8 space-x-2 md:space-x-4 no-print flex flex-col md:flex-row gap-2 md:gap-0 items-end">
-      
-    <!-- Removed bottom image button -->
-
-      <button
-        onclick="window.close()"
-        class="bg-gray-500 text-white px-6 py-3 rounded-full shadow-lg hover:bg-gray-600 font-bold"
+    <!-- Public visitor controls -->
+    <div 
+      class="fixed bottom-0 inset-x-0 sm:bottom-6 sm:inset-x-auto sm:right-6 z-40 bg-white/95 sm:bg-white/90 backdrop-blur-md border-t sm:border border-slate-200/80 shadow-2xl p-2.5 sm:px-6 sm:py-3 sm:rounded-full flex justify-center items-center gap-2.5 no-print"
+      style="padding-bottom: max(0.65rem, env(safe-area-inset-bottom, 0px));"
+    >
+      {% if user.is_authenticated %}
+      <a
+        href="{% url 'client_statement' client.id %}"
+        class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-4 py-2.5 rounded-full font-bold text-xs sm:text-sm active:scale-95 transition flex items-center gap-1.5"
       >
-        Cerrar
+        <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        <span>Volver a Panel</span>
+      </a>
+      {% endif %}
+      <button
+        onclick="closeStatement()"
+        class="bg-slate-900 text-white px-6 py-2.5 rounded-full shadow-md hover:bg-black font-bold text-xs sm:text-sm active:scale-95 transition flex items-center gap-2"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        <span>Cerrar Estado de Cuenta</span>
       </button>
     </div>
     {% endif %}
 
     <script>
-      function downloadImage() {
-        const container = document.getElementById('statement-container');
-        // A little styling adjustment for canvas capturing correctly without hover classes messing it up
-        html2canvas(container, { scale: 2, useCORS: true }).then(canvas => {
-          // Create an invisible link to download
+      function closeStatement() {
+        // 1. Try history back if the user navigated here from another page
+        if (window.history.length > 1) {
+          window.history.back();
+          return;
+        }
+
+        // 2. Try closing the tab/window (works if opened via script or link handler)
+        window.close();
+
+        // 3. Graceful fallback if modern browser sandbox blocks script tab-closing
+        setTimeout(() => {
+          {% if user.is_authenticated %}
+            window.location.href = "{% url 'client_statement' client.id %}";
+          {% else %}
+            document.body.innerHTML = `
+              <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f8fafc; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; text-align: center;">
+                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 24px; padding: 36px 24px; max-width: 380px; width: 100%; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.06);">
+                  <div style="width: 54px; height: 54px; background: #ecfdf5; color: #059669; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto 16px; font-weight: bold;">
+                    ✓
+                  </div>
+                  <h2 style="font-size: 18px; font-weight: 800; color: #0f172a; margin-bottom: 6px;">Estado de Cuenta Cerrado</h2>
+                  <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin-bottom: 24px;">Gracias por consultar su información. Ya puede cerrar esta ventana o pestaña de su navegador.</p>
+                  <button onclick="window.close()" style="width: 100%; background: #0f172a; color: white; border: none; padding: 12px 20px; border-radius: 14px; font-weight: 700; font-size: 13px; cursor: pointer;">
+                    Cerrar Pestaña
+                  </button>
+                </div>
+              </div>
+            `;
+          {% endif %}
+        }, 150);
+      }
+      function downloadFormalImage() {
+        const formalDoc = document.getElementById('formal-statement-document');
+        if (!formalDoc) return;
+        
+        // Indicate generating
+        const alpineRoot = document.querySelector('[x-data]');
+        if (alpineRoot && alpineRoot._x_dataStack) {
+          alpineRoot._x_dataStack[0].isGeneratingImg = true;
+        }
+
+        html2canvas(formalDoc, {
+          scale: 2.5,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false
+        }).then(canvas => {
           let link = document.createElement('a');
-          link.download = `Estado_Cuenta_{{ client.name }}.png`;
+          const cleanName = "{{ client.name|slugify }}";
+          const todayStr = "{{ now|date:'Ymd' }}";
+          link.download = `Estado_Cuenta_${cleanName}_${todayStr}.png`;
           link.href = canvas.toDataURL("image/png");
           link.click();
+        }).catch(err => {
+          console.error("Error al generar imagen formal:", err);
+          alert("Hubo un error al generar la imagen. Por favor intente nuevamente.");
+        }).finally(() => {
+          if (alpineRoot && alpineRoot._x_dataStack) {
+            alpineRoot._x_dataStack[0].isGeneratingImg = false;
+          }
         });
       }
     </script>

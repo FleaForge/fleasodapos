@@ -45,6 +45,8 @@ class Sale(models.Model):
     total = models.IntegerField(default=0)
     is_paid = models.BooleanField(default=True) # Cash is paid immediately
     is_annulled = models.BooleanField(default=False) # Annulled invoice
+    is_adjustment = models.BooleanField(default=False) # True if manual debt/balance adjustment, NOT commercial sale
+    consolidation_source_payment = models.ForeignKey('Payment', on_delete=models.SET_NULL, null=True, blank=True, related_name='consolidated_sales')
     note = models.TextField(blank=True, null=True)
 
     @property
@@ -77,6 +79,8 @@ class Payment(models.Model):
     date = models.DateTimeField(auto_now_add=True)
     note = models.TextField(blank=True)
     is_annulled = models.BooleanField(default=False)
+    is_consolidation = models.BooleanField(default=False)
+    consolidation_source_payment = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='consolidation_transfers')
 
     def __str__(self):
         return f"Pago {self.amount} - {self.client.name}"

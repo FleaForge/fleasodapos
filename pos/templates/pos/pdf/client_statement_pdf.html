@@ -199,9 +199,19 @@
                 </td>
                 <td>
                     <div>
+                        {% if sale.is_adjustment %}
+                        <span class="badge" style="background-color: #fff8e1; color: #b78103; border: 1px solid #ffe082;">AJUSTE #{{ sale.id }}</span>
+                        {% else %}
                         <span class="badge badge-compra">FACTURA #{{ sale.id }}</span>
+                        {% endif %}
                     </div>
                     
+                    {% if sale.note %}
+                    <div style="font-size: 9px; color: #444; margin-top: 2px;">
+                        <strong>Concepto:</strong> {{ sale.note }}
+                    </div>
+                    {% endif %}
+
                     {% if sale.items.all %}
                     <div class="items-detail" style="margin-top:2px; font-size:9px; color:#555; background:#f9f9f9; padding:2px 5px; border-radius:2px;">
                         <strong>Contenido:</strong><br>
@@ -213,10 +223,10 @@
 
                     {% if sale.allocations.all %}
                     <div class="items-detail" style="margin-top:2px; font-size:9px;">
-                        <strong>Abonos:</strong><br>
+                        <strong style="color: #2e7d32;">Abonos aplicados:</strong><br>
                         {% for alloc in sale.allocations.all %}
                             {% if not alloc.payment.is_annulled %}
-                            - Pago {{ alloc.payment.date|date:"d/m/y" }}: <strong style="color:#388e3c;">+${{ alloc.amount|intcomma }}</strong><br>
+                            - {{ alloc.payment.date|date:"d/m/Y" }} (Recibo #{{ alloc.payment.id }}): <strong style="color:#388e3c;">+${{ alloc.amount|intcomma }}</strong><br>
                             {% endif %}
                         {% endfor %}
                     </div>
@@ -234,14 +244,48 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="5" class="text-center">Cuenta estricatamente al día. Sin deuda activa.</td>
+                <td colspan="5" class="text-center">Cuenta estrictamente al día. Sin deuda activa.</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 
+    {% if recent_payments %}
+    <h3 style="font-size: 11px; margin-top: 15px; margin-bottom: 5px; text-transform: uppercase; color: #333;">Comprobantes Oficiales de Abono Recibidos</h3>
+    <table>
+        <thead>
+            <tr>
+                <th width="20%">Fecha</th>
+                <th width="15%">Recibo</th>
+                <th width="35%">Aplicado a</th>
+                <th width="15%">Nota</th>
+                <th width="15%" class="text-right">Monto</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for payment in recent_payments %}
+            {% if not payment.is_annulled %}
+            <tr>
+                <td style="font-size: 9px; color: #666;">{{ payment.date|date:"d/m/Y H:i" }}</td>
+                <td style="font-size: 9px; font-weight: bold;">Recibo #{{ payment.id }}</td>
+                <td style="font-size: 9px; color: #444;">
+                    {% for alloc in payment.allocations.all %}
+                        ↳ {% if alloc.sale.is_adjustment %}Ajuste #{{ alloc.sale.id }}{% else %}Factura #{{ alloc.sale.id }}{% endif %} (+${{ alloc.amount|intcomma }})<br>
+                    {% empty %}
+                        Abono general a cartera
+                    {% endfor %}
+                </td>
+                <td style="font-size: 9px; color: #666;">{{ payment.note|default:"Ingreso caja"|truncatechars:20 }}</td>
+                <td class="text-right" style="color: #388e3c; font-weight: bold; font-size: 10px;">+${{ payment.amount|intcomma }}</td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
     <div class="total-box">
-        Saldo Actual: <strong style="color: {% if current_debt > 0 %}#d32f2f{% else %}#388e3c{% endif %};">${{ current_debt|intcomma }}</strong>
+        Saldo Pendiente Actual: <strong style="color: {% if current_debt > 0 %}#d32f2f{% else %}#388e3c{% endif %};">${{ current_debt|intcomma }}</strong>
     </div>
 
     <div id="footerContent" class="footer">

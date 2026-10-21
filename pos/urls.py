@@ -1,5 +1,6 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
+from django.views.generic import RedirectView
 from . import views
 
 urlpatterns = [
@@ -10,6 +11,7 @@ urlpatterns = [
     path('clients/<int:client_id>/statement/', views.client_statement, name='client_statement'),
     path('clients/<int:client_id>/statement/pdf/', views.client_statement_pdf, name='client_statement_pdf'),
     path('clients/<int:client_id>/payment/add/', views.add_payment, name='add_payment'),
+    path('clients/<int:client_id>/adjust-balance/', views.adjust_client_balance, name='adjust_client_balance'),
     path('pos/', views.pos, name='pos'),
     
     # HTMX Partials
@@ -31,6 +33,12 @@ urlpatterns = [
     path('client/<int:client_id>/public-statement/', views.client_public_statement, name='client_public_statement'),
     path('sw.js', views.service_worker, name='service_worker'),
     path('manifest.json', views.manifest, name='manifest'),
+    
+    # Apple iOS & Favicon PWA Fallbacks
+    path('favicon.ico', RedirectView.as_view(url='/static/favicon.ico', permanent=True)),
+    path('apple-touch-icon.png', RedirectView.as_view(url='/static/logo.png', permanent=True)),
+    path('apple-touch-icon-precomposed.png', RedirectView.as_view(url='/static/logo.png', permanent=True)),
+
     path('inventory/edit/<int:product_id>/', views.edit_product, name='edit_product'),
     path('inventory/add-stock/<int:product_id>/', views.add_stock, name='add_stock'),
     path('clients/edit/<int:client_id>/', views.edit_client, name='edit_client'),

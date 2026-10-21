@@ -1,0 +1,133 @@
+{% load humanize %}
+<div class="overflow-x-auto">
+    <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <tr>
+                <th class="py-3 px-4"># Factura</th>
+                <th class="py-3 px-4">Fecha & Hora</th>
+                <th class="py-3 px-4">Cliente</th>
+                <th class="py-3 px-4">Modalidad</th>
+                <th class="py-3 px-4">Estado</th>
+                <th class="py-3 px-4 text-right">Total</th>
+                <th class="py-3 px-4 text-center">Acciones Rápidas</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            {% for invoice in invoices %}
+            <tr class="hover:bg-slate-50/80 transition {% if invoice.is_annulled %}bg-rose-50/40 opacity-75{% endif %}">
+                <!-- ID -->
+                <td class="py-3.5 px-4 font-mono font-bold text-slate-800 text-sm">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
+                        #{{ invoice.id }}
+                    </span>
+                </td>
+
+                <!-- Date -->
+                <td class="py-3.5 px-4 text-slate-600 text-xs whitespace-nowrap">
+                    {{ invoice.date|date:"d/m/Y H:i" }}
+                </td>
+
+                <!-- Client -->
+                <td class="py-3.5 px-4">
+                    <div class="font-bold text-slate-800 text-sm">{{ invoice.client.name }}</div>
+                    {% if invoice.client.phone %}
+                    <div class="text-xs text-slate-400 font-mono">{{ invoice.client.phone }}</div>
+                    {% endif %}
+                </td>
+
+                <!-- Payment Method / Document Type -->
+                <td class="py-3.5 px-4 whitespace-nowrap">
+                    {% if invoice.is_adjustment %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                        Ajuste Cartera
+                    </span>
+                    {% elif invoice.payment_method == 'CASH' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Contado
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                        Crédito
+                    </span>
+                    {% endif %}
+                </td>
+
+                <!-- Status -->
+                <td class="py-3.5 px-4 whitespace-nowrap">
+                    {% if invoice.is_annulled %}
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700 border border-rose-300">
+                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                        Anulada
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        Válida
+                    </span>
+                    {% endif %}
+                </td>
+
+                <!-- Total -->
+                <td class="py-3.5 px-4 text-right font-extrabold text-slate-800 text-sm whitespace-nowrap">
+                    ${{ invoice.total|intcomma }}
+                </td>
+
+                <!-- Actions -->
+                <td class="py-3.5 px-4 text-center whitespace-nowrap">
+                    <div class="inline-flex items-center gap-1.5">
+                        <!-- Ver Detalle -->
+                        <a href="{% url 'invoice_detail' invoice.id %}"
+                           title="Ver Comprobante / Imprimir"
+                           class="inline-flex items-center gap-1 bg-white hover:bg-brand-50 text-brand-500 border border-slate-200 hover:border-brand-400 px-2.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition active:scale-95">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                            <span>Ver</span>
+                        </a>
+
+                        <!-- Editar Factura (solo ventas comerciales con productos) -->
+                        {% if not invoice.is_adjustment %}
+                        <a href="{% url 'edit_sale' invoice.id %}"
+                           title="Editar Factura"
+                           class="inline-flex items-center gap-1 bg-white hover:bg-yellow-50 text-amber-700 border border-slate-200 hover:border-amber-400 px-2.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition active:scale-95">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                            <span>Editar</span>
+                        </a>
+                        {% endif %}
+
+                        <!-- Anular Comprobante / Factura -->
+                        {% if not invoice.is_annulled %}
+                        <form method="POST" action="{% url 'annul_sale' invoice.id %}"
+                              onsubmit="return confirm('¿Confirmas anular {% if invoice.is_adjustment %}el ajuste #{{ invoice.id }} de {{ invoice.client.name }} por ${{ invoice.total|intcomma }}?\n\nEsta acción revertirá el saldo deudor del cliente.{% else %}la factura #{{ invoice.id }} de {{ invoice.client.name }} por ${{ invoice.total|intcomma }}?\n\nEsta acción restaurará el inventario.{% endif %}');"
+                              class="inline m-0">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit"
+                                    title="{% if invoice.is_adjustment %}Anular Ajuste{% else %}Anular Factura{% endif %}"
+                                    class="inline-flex items-center gap-1 bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 hover:border-rose-400 px-2.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition active:scale-95">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                <span>Anular</span>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" class="py-12 text-center text-slate-400">
+                    <div class="flex flex-col items-center justify-center">
+                        <svg class="w-10 h-10 text-slate-300 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <p class="font-bold text-slate-600 text-sm">No se encontraron facturas</p>
+                        {% if search_query %}
+                        <p class="text-xs text-slate-400 mt-1">No hay resultados para "<span class="font-semibold">{{ search_query }}</span>". Intenta con otro número de factura o nombre de cliente.</p>
+                        {% else %}
+                        <p class="text-xs text-slate-400 mt-1">No hay ventas registradas en el periodo o filtros seleccionados.</p>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
