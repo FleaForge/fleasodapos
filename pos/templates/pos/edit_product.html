@@ -2,7 +2,8 @@
 {% load humanize %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto py-4 sm:py-6" x-data="{ price: Number('{{ product.price|default:0 }}') || 0, stock: Number('{{ product.stock|default:0 }}') || 0 }">
+<div class="max-w-3xl mx-auto py-4 sm:py-6 space-y-6" 
+     x-data="productEditor({{ product.cost_price|default:0 }}, {{ product.price|default:0 }}, {{ product.stock|default:0 }})">
 
     <!-- Main Card -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -10,20 +11,27 @@
         <!-- Header -->
         <div class="p-6 sm:p-7 border-b border-slate-100 bg-gradient-to-b from-slate-50/70 to-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 font-mono">
                         ID #{{ product.id }}
                     </span>
                     <span 
                         :class="stock <= 0 ? 'bg-rose-50 text-rose-700 border-rose-200' : (stock <= 5 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200')"
-                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold border transition-colors"
-                        x-text="stock <= 0 ? 'Agotado' : (stock <= 5 ? 'Stock Bajo' : 'Disponible')"
+                        class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold border transition-colors"
+                        x-text="stock <= 0 ? 'Agotado' : (stock <= 5 ? 'Stock Bajo (' + stock + ')' : 'Disponible (' + stock + ')')"
                     >
                         {% if product.stock <= 0 %}Agotado{% elif product.stock <= 5 %}Stock Bajo{% else %}Disponible{% endif %}
                     </span>
+                    <span 
+                        class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold border transition-colors"
+                        :class="status.badgeClass"
+                        x-text="status.label"
+                    >
+                        Rentabilidad
+                    </span>
                 </div>
                 <h1 class="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">Editar Producto</h1>
-                <p class="text-xs sm:text-sm text-slate-500 mt-0.5">Modifica los datos del artículo, código de barras y existencia en inventario.</p>
+                <p class="text-xs sm:text-sm text-slate-500 mt-0.5">Modifica los datos del artículo, ajusta costos, rentabilidad y precios de venta.</p>
             </div>
 
             <a href="{% url 'inventory' %}" 
@@ -36,27 +44,74 @@
         </div>
 
         <!-- Form Body -->
-        <form method="post" class="p-6 sm:p-7 space-y-5">
+        <form method="post" enctype="multipart/form-data" class="p-6 sm:p-7 space-y-6">
             {% csrf_token %}
+
+            <!-- Foto del Producto -->
+            <div x-data="{ 
+                imagePreview: {% if product.image %}'{{ product.image.url }}'{% else %}null{% endif %},
+                clearImage: false 
+            }">
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                    Foto del Producto <span class="text-slate-400 font-normal lowercase">(opcional)</span>
+                </label>
+                <div class="flex items-center gap-4 p-3.5 rounded-2xl border border-slate-200 bg-slate-50/70">
+                    <!-- Thumbnail Box -->
+                    <div class="relative w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+                        <template x-if="imagePreview && !clearImage">
+                            <img :src="imagePreview" alt="Foto del producto" class="w-full h-full object-cover">
+                        </template>
+                        <template x-if="!imagePreview || clearImage">
+                            <span class="text-3xl text-slate-300 select-none">📷</span>
+                        </template>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex-1 space-y-2">
+                        <input type="hidden" name="clear_image" :value="clearImage">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <label class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition active:scale-95 border border-slate-200 shadow-2xs">
+                                <svg class="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                </svg>
+                                <span x-text="imagePreview && !clearImage ? 'Cambiar Foto' : 'Tomar / Subir Foto'"></span>
+                                <input type="file" name="image" accept="image/*" class="hidden" 
+                                       @change="clearImage = false; const f = $event.target.files[0]; if (f) { const r = new FileReader(); r.onload = (e) => imagePreview = e.target.result; r.readAsDataURL(f); }">
+                            </label>
+
+                            <template x-if="imagePreview && !clearImage">
+                                <button type="button" @click="clearImage = true" class="inline-flex items-center gap-1 px-3 py-2 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200/80 transition active:scale-95">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                    <span>Eliminar Foto</span>
+                                </button>
+                            </template>
+                        </div>
+                        <p class="text-[11px] text-slate-400">Puedes tomar la foto con la cámara del teléfono o elegir de la galería</p>
+                    </div>
+                </div>
+            </div>
 
             <!-- Nombre del Producto -->
             <div>
                 <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
                     Nombre del Producto <span class="text-rose-500">*</span>
                 </label>
-                <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <div class="flex items-stretch rounded-xl border border-slate-300 bg-white overflow-hidden shadow-2xs focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 transition">
+                    <span class="inline-flex items-center px-3.5 bg-slate-50 text-slate-400 border-r border-slate-200 select-none">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
                         </svg>
-                    </div>
+                    </span>
                     <input 
                         type="text" 
                         name="name" 
                         value="{{ product.name }}" 
                         required
                         placeholder="Ej: Gaseosa Postobón 350ml / Cuaderno 100 Hojas"
-                        class="w-full bg-slate-50 hover:bg-white focus:bg-white text-slate-800 font-medium pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition outline-none text-sm sm:text-base shadow-2xs"
+                        class="w-full px-3.5 py-3 text-slate-800 font-semibold text-sm sm:text-base outline-none bg-transparent"
                     />
                 </div>
             </div>
@@ -67,82 +122,333 @@
                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
                         Código de Barras
                     </label>
-                    <span class="text-[11px] text-slate-400 font-medium">Opcional para lectura láser</span>
+                    <button type="button" 
+                            onclick="openBarcodeScanner('edit-product-barcode')"
+                            class="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-2.5 py-1 rounded-lg transition active:scale-95 border border-brand-200/60 shadow-2xs"
+                            title="Abrir cámara del móvil para leer código de barras">
+                        <svg class="w-3.5 h-3.5 text-brand-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span>Usar Cámara</span>
+                    </button>
                 </div>
-                <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <div class="flex items-stretch rounded-xl border border-slate-300 bg-white overflow-hidden shadow-2xs focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 transition">
+                    <span class="inline-flex items-center px-3.5 bg-slate-50 text-slate-400 border-r border-slate-200 select-none font-mono text-xs">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
                         </svg>
-                    </div>
+                    </span>
                     <input 
                         type="text" 
+                        id="edit-product-barcode"
                         name="barcode" 
                         value="{{ product.barcode|default:'' }}"
-                        placeholder="Ej: 770123456789 (o escanea directamente)"
-                        class="w-full bg-slate-50 hover:bg-white focus:bg-white text-slate-800 font-mono pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition outline-none text-sm sm:text-base shadow-2xs"
+                        placeholder="Ej: 770123456789 (o escanea con la cámara)"
+                        class="w-full px-3.5 py-3 text-slate-800 font-mono text-sm sm:text-base outline-none bg-transparent"
                     />
+                    <button type="button" 
+                            onclick="openBarcodeScanner('edit-product-barcode')"
+                            class="inline-flex items-center px-3.5 bg-slate-50 hover:bg-brand-50 text-slate-500 hover:text-brand-600 border-l border-slate-200 transition active:scale-95 group" 
+                            title="Escanear con cámara del móvil">
+                        <svg class="w-4 h-4 transition group-hover:scale-110" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+                        </svg>
+                    </button>
                 </div>
             </div>
 
-            <!-- Grid 2 Columnas: Precio & Stock -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- SECCIÓN INTERACTIVA: PRECIOS Y CALCULADORA DE RENTABILIDAD -->
+            <div class="p-5 sm:p-6 rounded-2xl bg-slate-50/70 border border-slate-200 space-y-4">
                 
-                <!-- Precio de Venta -->
-                <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                        Precio de Venta <span class="text-rose-500">*</span>
-                    </label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500 font-black text-lg">
-                            $
-                        </div>
-                        <input 
-                            type="number" 
-                            step="0.01" 
-                            name="price" 
-                            x-model.number="price"
-                            required
-                            placeholder="0"
-                            class="w-full bg-slate-50 hover:bg-white focus:bg-white text-slate-900 font-black pl-9 pr-4 py-3 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition outline-none text-base sm:text-lg shadow-2xs"
-                        />
+                <!-- Encabezado de la Sección de Precios -->
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-200">
+                    <div>
+                        <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center text-xs">
+                                📊
+                            </span>
+                            <span>Fijación de Precios y Rentabilidad</span>
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Coloca el costo y fija la rentabilidad (%), o introduce el precio final y analiza tu margen.</p>
                     </div>
-                    <span class="text-[11px] text-slate-400 mt-1 block">Precio por unidad al público (COP)</span>
+
+                    <!-- Switch de Modo de Cálculo -->
+                    <div class="inline-flex items-center p-1 bg-white rounded-xl border border-slate-200 shadow-2xs text-xs font-bold self-start sm:self-auto">
+                        <button type="button" 
+                                @click="setMarginType('markup')" 
+                                :class="marginType === 'markup' ? 'bg-brand-500 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'"
+                                class="px-3 py-1.5 rounded-lg transition-all"
+                                title="Markup: Margen calculado sobre el costo de adquisición (Costo + %)">
+                            Sobre Costo
+                        </button>
+                        <button type="button" 
+                                @click="setMarginType('margin')" 
+                                :class="marginType === 'margin' ? 'bg-brand-500 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'"
+                                class="px-3 py-1.5 rounded-lg transition-all"
+                                title="Margen Comercial: Calculado sobre el precio final de venta (% de la venta)">
+                            Sobre Venta
+                        </button>
+                    </div>
                 </div>
 
+                <!-- 3 Inputs Armonizados y Alineados -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    
+                    <!-- 1. Costo Compra -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                                Costo Compra <span class="text-rose-500">*</span>
+                            </label>
+                            <span class="text-[10px] font-bold text-slate-400 bg-slate-200/60 px-1.5 py-0.5 rounded">Unitario</span>
+                        </div>
+                        <div class="flex items-stretch rounded-xl border border-slate-300 bg-white overflow-hidden shadow-2xs focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 transition">
+                            <span class="inline-flex items-center px-3 bg-slate-100/80 text-slate-500 font-bold text-sm border-r border-slate-200 select-none">
+                                $
+                            </span>
+                            <input 
+                                type="number" 
+                                step="1" 
+                                name="cost_price" 
+                                x-model.number="cost"
+                                @input="onCostChange()"
+                                required
+                                placeholder="0"
+                                class="w-full px-3 py-2.5 text-slate-900 font-black text-base sm:text-lg outline-none bg-transparent font-mono"
+                            />
+                            <span class="inline-flex items-center px-2.5 bg-slate-50 text-slate-400 font-bold text-xs border-l border-slate-200 select-none">
+                                COP
+                            </span>
+                        </div>
+                        <span class="text-[11px] text-slate-400 block truncate">Pagado al proveedor</span>
+                    </div>
+
+                    <!-- 2. Rentabilidad % -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                                Rentabilidad
+                            </label>
+                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                                  :class="marginType === 'markup' ? 'bg-indigo-50 text-indigo-700' : 'bg-brand-50 text-brand-700'"
+                                  x-text="marginType === 'markup' ? 'Markup (s/costo)' : 'Margen (s/venta)'">
+                                s/costo
+                            </span>
+                        </div>
+                        <div class="flex items-stretch rounded-xl border border-slate-300 bg-white overflow-hidden shadow-2xs focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-500/15 transition">
+                            <span class="inline-flex items-center px-3 bg-indigo-50 text-indigo-600 font-bold text-sm border-r border-indigo-100 select-none">
+                                +
+                            </span>
+                            <input 
+                                type="number" 
+                                step="0.1" 
+                                x-model.number="marginPercent"
+                                @input="onMarginChange()"
+                                placeholder="0"
+                                class="w-full px-3 py-2.5 text-indigo-700 font-black text-base sm:text-lg outline-none bg-transparent font-mono"
+                            />
+                            <span class="inline-flex items-center px-3 bg-indigo-50 text-indigo-700 font-bold text-xs border-l border-indigo-100 select-none">
+                                %
+                            </span>
+                        </div>
+                        <span class="text-[11px] text-slate-400 block truncate">Ganancia porcentual</span>
+                    </div>
+
+                    <!-- 3. Precio Venta Final -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                                Precio Final <span class="text-rose-500">*</span>
+                            </label>
+                            <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">PVP Público</span>
+                        </div>
+                        <div class="flex items-stretch rounded-xl border border-slate-300 bg-white overflow-hidden shadow-2xs focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-500/15 transition">
+                            <span class="inline-flex items-center px-3 bg-emerald-50 text-emerald-700 font-bold text-sm border-r border-emerald-100 select-none">
+                                $
+                            </span>
+                            <input 
+                                type="number" 
+                                step="1" 
+                                name="price" 
+                                x-model.number="price"
+                                @input="onPriceChange()"
+                                required
+                                placeholder="0"
+                                class="w-full px-3 py-2.5 text-emerald-700 font-black text-base sm:text-lg outline-none bg-transparent font-mono"
+                            />
+                            <span class="inline-flex items-center px-2.5 bg-slate-50 text-slate-400 font-bold text-xs border-l border-slate-200 select-none">
+                                COP
+                            </span>
+                        </div>
+                        <span class="text-[11px] text-slate-400 block truncate">Precio pagado por el cliente</span>
+                    </div>
+                </div>
+
+                <!-- Barra de Presets Rápidos de Margen -->
+                <div class="pt-2 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <span class="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" />
+                        </svg>
+                        <span>Fijar margen rápido:</span>
+                    </span>
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <button type="button" @click="applyPreset(15)" 
+                                :class="marginPercent === 15 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'"
+                                class="text-xs font-bold px-2.5 py-1 rounded-lg border transition shadow-2xs">
+                            +15%
+                        </button>
+                        <button type="button" @click="applyPreset(20)" 
+                                :class="marginPercent === 20 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'"
+                                class="text-xs font-bold px-2.5 py-1 rounded-lg border transition shadow-2xs">
+                            +20%
+                        </button>
+                        <button type="button" @click="applyPreset(30)" 
+                                :class="marginPercent === 30 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'"
+                                class="text-xs font-bold px-2.5 py-1 rounded-lg border transition shadow-2xs">
+                            +30%
+                        </button>
+                        <button type="button" @click="applyPreset(40)" 
+                                :class="marginPercent === 40 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'"
+                                class="text-xs font-bold px-2.5 py-1 rounded-lg border transition shadow-2xs">
+                            +40%
+                        </button>
+                        <button type="button" @click="applyPreset(50)" 
+                                :class="marginPercent === 50 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'"
+                                class="text-xs font-bold px-2.5 py-1 rounded-lg border transition shadow-2xs">
+                            +50%
+                        </button>
+                        <button type="button" @click="applyPreset(100)" 
+                                :class="marginPercent === 100 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'"
+                                class="text-xs font-bold px-2.5 py-1 rounded-lg border transition shadow-2xs">
+                            x2 (100%)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tarjeta Elegante de Resultado de Rentabilidad -->
+                <div class="rounded-xl p-4 border transition-colors"
+                     :class="profitAmount < 0 ? 'bg-rose-50/80 border-rose-200 text-rose-900' : (profitAmount === 0 ? 'bg-amber-50/70 border-amber-200 text-amber-900' : 'bg-white border-slate-200 shadow-2xs')">
+                    
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center font-black text-white shrink-0 shadow-2xs"
+                                 :class="status.iconBg">
+                                <span x-text="profitAmount > 0 ? '$' : (profitAmount === 0 ? '=' : '!')"></span>
+                            </div>
+                            <div>
+                                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                                    Ganancia Bruta Unitaria
+                                </span>
+                                <div class="flex items-baseline gap-2 flex-wrap">
+                                    <span class="text-lg sm:text-xl font-black font-mono"
+                                          :class="profitAmount > 0 ? 'text-emerald-600' : (profitAmount === 0 ? 'text-slate-700' : 'text-rose-600')"
+                                          x-text="formatCurrency(profitAmount)">
+                                        $0 COP
+                                    </span>
+                                    <span class="text-xs font-extrabold text-slate-500 font-mono">
+                                        (<span x-text="markupPercent >= 0 ? '+' + markupPercent : markupPercent">0</span>% s/costo | <span x-text="salesMarginPercent">0</span>% s/venta)
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="self-start sm:self-auto">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border shadow-2xs"
+                                  :class="status.badgeClass" 
+                                  x-text="status.label">
+                                Rentabilidad
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Alerta suave y clara si vende a pérdida -->
+                    <div x-show="profitAmount < 0 && price > 0" class="mt-3 pt-3 border-t border-rose-200 text-xs font-bold text-rose-700 flex items-center gap-2">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        <span>El precio de venta es menor al costo. Estás asumiendo una pérdida por cada unidad vendida.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grid 2 Columnas: Stock y Motivo de Cambio -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
                 <!-- Stock Actual -->
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                        Stock Actual <span class="text-rose-500">*</span>
+                        Stock Físico Actual <span class="text-rose-500">*</span>
                     </label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <div class="flex items-stretch rounded-xl border border-slate-300 bg-white overflow-hidden shadow-2xs focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 transition">
+                        <span class="inline-flex items-center px-3.5 bg-slate-50 text-slate-400 border-r border-slate-200 select-none">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
                             </svg>
-                        </div>
+                        </span>
                         <input 
                             type="number" 
                             name="stock" 
                             x-model.number="stock"
                             required
                             placeholder="0"
-                            class="w-full bg-slate-50 hover:bg-white focus:bg-white text-slate-900 font-black pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition outline-none text-base sm:text-lg shadow-2xs"
+                            class="w-full px-3.5 py-3 text-slate-900 font-black text-base outline-none bg-transparent font-mono"
+                        />
+                        <span class="inline-flex items-center px-3 bg-slate-50 text-slate-400 font-bold text-xs border-l border-slate-200 select-none">
+                            Unidades
+                        </span>
+                    </div>
+                    <span class="text-[11px] text-slate-400 mt-1 block">Existencias físicas en bodega</span>
+                </div>
+
+                <!-- Motivo del Cambio de Precio (Historial) -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                            Motivo del Cambio
+                        </label>
+                        <span class="text-[11px] text-slate-400 font-medium">Opcional para auditoría</span>
+                    </div>
+                    <div class="flex items-stretch rounded-xl border border-slate-300 bg-white overflow-hidden shadow-2xs focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 transition">
+                        <span class="inline-flex items-center px-3.5 bg-slate-50 text-slate-400 border-r border-slate-200 select-none">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                            </svg>
+                        </span>
+                        <input 
+                            type="text" 
+                            name="price_change_reason" 
+                            placeholder="Ej: Aumento proveedor, ajuste o promoción..."
+                            class="w-full px-3.5 py-3 text-slate-800 font-medium text-sm outline-none bg-transparent"
                         />
                     </div>
-                    <span class="text-[11px] text-slate-400 mt-1 block">Unidades físicas disponibles</span>
+                    <span class="text-[11px] text-slate-400 mt-1 block">Quedará registrado en el historial de precios</span>
                 </div>
             </div>
 
-            <!-- Dynamic Valuation Card -->
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between text-xs sm:text-sm">
-                <span class="text-slate-600 font-medium flex items-center gap-2">
-                    <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                    <span>Valor estimado en inventario:</span>
-                </span>
-                <span class="font-black text-slate-800 text-sm sm:text-base">
-                    $<span x-text="(Number(price || 0) * Number(stock || 0)).toLocaleString('es-CO')">0</span> COP
-                </span>
+            <!-- Valuación del Inventario de este Producto -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs">
+                <div>
+                    <span class="text-slate-500 font-bold block">Inversión Stock (Costo):</span>
+                    <span class="font-black text-slate-800 text-sm font-mono" x-text="formatCurrency(cost * stock)">
+                        $0 COP
+                    </span>
+                </div>
+                <div>
+                    <span class="text-slate-500 font-bold block">Valor Venta Stock:</span>
+                    <span class="font-black text-brand-600 text-sm font-mono" x-text="formatCurrency(price * stock)">
+                        $0 COP
+                    </span>
+                </div>
+                <div>
+                    <span class="text-slate-500 font-bold block">Ganancia Potencial Stock:</span>
+                    <span class="font-black text-sm font-mono" 
+                          :class="profitAmount > 0 ? 'text-emerald-700' : (profitAmount === 0 ? 'text-slate-700' : 'text-rose-600')"
+                          x-text="formatCurrency(profitAmount * stock)">
+                        $0 COP
+                    </span>
+                </div>
             </div>
 
             <!-- Action Buttons -->
@@ -154,7 +460,7 @@
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
                     </svg>
-                    <span>Guardar Cambios</span>
+                    <span>Guardar Cambios y Registrar Historial</span>
                 </button>
 
                 <a 
@@ -166,5 +472,259 @@
             </div>
         </form>
     </div>
+
+    <!-- SECCIÓN: HISTORIAL DE CAMBIOS DE PRECIOS DEL ARTÍCULO -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-brand-100 text-brand-500 flex items-center justify-center font-bold">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-black text-slate-800">Historial de Precios y Costos de este Producto</h3>
+                    <p class="text-[11px] text-slate-500">Trazabilidad de cada modificación efectuada a lo largo del tiempo</p>
+                </div>
+            </div>
+            <span class="text-xs font-bold text-slate-500 bg-white px-2.5 py-1 rounded-full border border-slate-200">
+                {{ price_history|length }} registros
+            </span>
+        </div>
+
+        {% if price_history %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs sm:text-sm">
+                <thead class="bg-slate-100/60 border-b border-slate-200 text-slate-600 font-bold">
+                    <tr>
+                        <th class="py-3 px-4">Fecha y Hora</th>
+                        <th class="py-3 px-4">Costo Compra</th>
+                        <th class="py-3 px-4">Precio Venta</th>
+                        <th class="py-3 px-4">Rentabilidad</th>
+                        <th class="py-3 px-4">Usuario / Motivo</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for h in price_history %}
+                    <tr class="hover:bg-slate-50/70 transition-colors">
+                        <td class="py-3 px-4 whitespace-nowrap">
+                            <span class="font-bold text-slate-800 block">{{ h.date|date:"d M Y" }}</span>
+                            <span class="text-[11px] text-slate-400">{{ h.date|date:"h:i A" }}</span>
+                        </td>
+                        <td class="py-3 px-4 whitespace-nowrap font-mono">
+                            <div class="flex items-center gap-1">
+                                {% if h.old_cost_price != h.new_cost_price %}
+                                <span class="text-slate-400 line-through text-xs">${{ h.old_cost_price|intcomma }}</span>
+                                <span class="text-slate-400 text-xs">➔</span>
+                                {% endif %}
+                                <span class="font-bold text-slate-800">${{ h.new_cost_price|intcomma }}</span>
+                            </div>
+                            {% if h.cost_diff != 0 %}
+                            <span class="text-[10px] {% if h.cost_diff > 0 %}text-amber-600{% else %}text-emerald-600{% endif %} font-bold block">
+                                {% if h.cost_diff > 0 %}+{% endif %}${{ h.cost_diff|intcomma }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 whitespace-nowrap font-mono">
+                            <div class="flex items-center gap-1">
+                                {% if h.old_price != h.new_price %}
+                                <span class="text-slate-400 line-through text-xs">${{ h.old_price|intcomma }}</span>
+                                <span class="text-slate-400 text-xs">➔</span>
+                                {% endif %}
+                                <span class="font-bold text-brand-600">${{ h.new_price|intcomma }}</span>
+                            </div>
+                            {% if h.price_diff != 0 %}
+                            <span class="text-[10px] {% if h.price_diff > 0 %}text-emerald-600{% else %}text-rose-600{% endif %} font-bold block">
+                                {% if h.price_diff > 0 %}+{% endif %}${{ h.price_diff|intcomma }} ({{ h.price_diff_percent }}%)
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-black {% if h.new_profit > 0 %}bg-emerald-50 text-emerald-700 border border-emerald-200{% elif h.new_profit == 0 %}bg-amber-50 text-amber-700 border border-amber-200{% else %}bg-rose-50 text-rose-700 border border-rose-200{% endif %}">
+                                +{{ h.new_margin_markup }}%
+                            </span>
+                            <span class="text-[10px] text-slate-500 block font-medium mt-0.5">
+                                Ganancia: ${{ h.new_profit|intcomma }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4">
+                            <span class="font-bold text-slate-700 block">{{ h.user.username|default:"Sistema" }}</span>
+                            <span class="text-[11px] text-slate-500 italic">{{ h.reason|default:"Ajuste de precio" }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-8 text-center text-slate-400">
+            <p class="text-sm font-bold text-slate-600">No hay registros de cambios de precio previos</p>
+            <p class="text-xs text-slate-400 mt-0.5">Cuando actualices el costo o precio de este producto, aparecerá aquí el historial con fechas y usuarios.</p>
+        </div>
+        {% endif %}
+    </div>
 </div>
+
+<!-- Script Alpine de la Calculadora Bidireccional de Rentabilidad -->
+<script>
+function productEditor(initialCost, initialPrice, initialStock) {
+    return {
+        cost: Number(initialCost) || 0,
+        price: Number(initialPrice) || 0,
+        stock: Number(initialStock) || 0,
+        marginPercent: 30,
+        marginType: 'markup', // 'markup' (% s/costo) o 'margin' (% s/venta)
+        lastChanged: initialPrice > 0 ? 'price' : 'margin',
+
+        init() {
+            if (this.cost > 0 && this.price > 0) {
+                this.recalculateMarginFromPrice();
+            } else if (this.cost > 0 && this.price === 0) {
+                this.recalculatePriceFromMargin();
+            }
+        },
+
+        onCostChange() {
+            if (this.lastChanged === 'margin') {
+                this.recalculatePriceFromMargin();
+            } else {
+                this.recalculateMarginFromPrice();
+            }
+        },
+
+        onPriceChange() {
+            this.lastChanged = 'price';
+            this.recalculateMarginFromPrice();
+        },
+
+        onMarginChange() {
+            this.lastChanged = 'margin';
+            this.recalculatePriceFromMargin();
+        },
+
+        applyPreset(pct) {
+            this.marginPercent = pct;
+            this.lastChanged = 'margin';
+            this.recalculatePriceFromMargin();
+        },
+
+        setMarginType(type) {
+            this.marginType = type;
+            if (this.lastChanged === 'margin') {
+                this.recalculatePriceFromMargin();
+            } else {
+                this.recalculateMarginFromPrice();
+            }
+        },
+
+        recalculatePriceFromMargin() {
+            const c = Number(this.cost) || 0;
+            const m = Number(this.marginPercent) || 0;
+            if (c <= 0) return;
+
+            let p = 0;
+            if (this.marginType === 'markup') {
+                p = c * (1 + m / 100);
+            } else {
+                if (m >= 100) p = c * 2;
+                else p = c / (1 - m / 100);
+            }
+            this.price = Math.round(p);
+        },
+
+        recalculateMarginFromPrice() {
+            const c = Number(this.cost) || 0;
+            const p = Number(this.price) || 0;
+            if (c <= 0 || p <= 0) {
+                this.marginPercent = (c <= 0 && p > 0) ? 100 : 0;
+                return;
+            }
+
+            if (this.marginType === 'markup') {
+                this.marginPercent = Math.round(((p - c) / c) * 1000) / 10;
+            } else {
+                this.marginPercent = Math.round(((p - c) / p) * 1000) / 10;
+            }
+        },
+
+        get profitAmount() {
+            return (Number(this.price) || 0) - (Number(this.cost) || 0);
+        },
+
+        get markupPercent() {
+            const c = Number(this.cost) || 0;
+            const p = Number(this.price) || 0;
+            if (c <= 0) return p > 0 ? 100 : 0;
+            return Math.round(((p - c) / c) * 1000) / 10;
+        },
+
+        get salesMarginPercent() {
+            const c = Number(this.cost) || 0;
+            const p = Number(this.price) || 0;
+            if (p <= 0) return 0;
+            return Math.round(((p - c) / p) * 1000) / 10;
+        },
+
+        formatCurrency(amount) {
+            const val = Math.round(Number(amount) || 0);
+            const sign = val < 0 ? '-' : (val > 0 ? '+' : '');
+            return sign + '$' + Math.abs(val).toLocaleString('es-CO') + ' COP';
+        },
+
+        get status() {
+            const p = this.profitAmount;
+            const m = this.markupPercent;
+            const priceVal = Number(this.price) || 0;
+
+            if (priceVal === 0) {
+                return {
+                    label: 'Sin Precio Venta',
+                    badgeClass: 'bg-slate-100 text-slate-700 border-slate-200',
+                    iconBg: 'bg-slate-400'
+                };
+            }
+            if (p < 0) {
+                return {
+                    label: 'Venta a Pérdida',
+                    badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
+                    iconBg: 'bg-rose-500'
+                };
+            }
+            if (p === 0) {
+                return {
+                    label: 'Sin Ganancia (0%)',
+                    badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+                    iconBg: 'bg-amber-500'
+                };
+            }
+            if (m < 15) {
+                return {
+                    label: 'Margen Bajo (<15%)',
+                    badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+                    iconBg: 'bg-amber-500'
+                };
+            }
+            if (m < 30) {
+                return {
+                    label: 'Margen Aceptable (15-30%)',
+                    badgeClass: 'bg-sky-50 text-sky-700 border-sky-200',
+                    iconBg: 'bg-sky-500'
+                };
+            }
+            if (m < 50) {
+                return {
+                    label: 'Buen Margen (30-50%)',
+                    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                    iconBg: 'bg-emerald-500'
+                };
+            }
+            return {
+                label: 'Alto Margen (>50%)',
+                badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
+                iconBg: 'bg-purple-500'
+            };
+        }
+    };
+}
+</script>
 {% endblock %}

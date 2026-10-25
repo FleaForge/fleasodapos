@@ -170,6 +170,35 @@
             <span class="{% if sale.is_adjustment %}text-amber-600{% else %}text-brand-500{% endif %}">${{ sale.total|intcomma }}</span>
         </div>
 
+        <!-- Auditoría de Rentabilidad Interna (Solo en Pantalla, No se Imprime) -->
+        {% if not sale.is_adjustment and not sale.is_annulled %}
+        <div class="mt-4 p-3.5 bg-emerald-50/80 rounded-xl border border-emerald-200 no-print text-left">
+            <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-emerald-800 flex items-center gap-1.5">
+                    <span>💼</span>
+                    <span>Rentabilidad Interna de esta Factura</span>
+                </span>
+                <span class="text-[10px] font-black bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full">
+                    Margen {{ sale.margin_profit }}%
+                </span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-emerald-200/60 text-xs">
+                <div>
+                    <span class="text-[10px] text-emerald-700 block">Costo Mercancía</span>
+                    <span class="font-bold text-slate-700 font-mono">${{ sale.total_cost|intcomma }}</span>
+                </div>
+                <div>
+                    <span class="text-[10px] text-emerald-700 block">Ganancia Neta</span>
+                    <span class="font-black text-emerald-700 font-mono">+${{ sale.total_profit|intcomma }}</span>
+                </div>
+                <div>
+                    <span class="text-[10px] text-emerald-700 block">Markup s/ Costo</span>
+                    <span class="font-bold text-emerald-700 font-mono">+{{ sale.margin_markup }}%</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <div class="mt-8 text-center text-xs text-gray-400">
             {% if sale.is_adjustment %}
             <p class="font-medium text-gray-500">Comprobante Contable Interno de Cartera</p>

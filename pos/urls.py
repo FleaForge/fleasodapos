@@ -16,6 +16,7 @@ urlpatterns = [
     
     # HTMX Partials
     path('pos/search/', views.search_products, name='search_products'),
+    path('pos/scan-add/', views.scan_and_add_to_cart, name='scan_and_add_to_cart'),
     path('pos/add-cart/', views.add_to_cart, name='add_to_cart'),
     path('pos/update-cart/', views.update_cart_item, name='update_cart_item'),
     path('pos/clear-cart/', views.clear_cart, name='clear_cart'),
@@ -41,6 +42,8 @@ urlpatterns = [
 
     path('inventory/edit/<int:product_id>/', views.edit_product, name='edit_product'),
     path('inventory/add-stock/<int:product_id>/', views.add_stock, name='add_stock'),
+    path('inventory/product/<int:product_id>/price-history/', views.product_price_history, name='product_price_history'),
+    path('inventory/price-history/', views.global_price_history, name='global_price_history'),
     path('clients/edit/<int:client_id>/', views.edit_client, name='edit_client'),
     path('invoice/edit/<int:sale_id>/', views.edit_sale, name='edit_sale'),
     path('invoice/<int:sale_id>/search-products/', views.search_products_for_sale, name='search_products_for_sale'),

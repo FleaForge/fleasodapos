@@ -5,23 +5,37 @@
 >
   <!-- Left Side: Product Search & Grid -->
   <div class="flex-1 flex flex-col overflow-hidden">
-    <!-- Search Bar -->
+    <!-- Notification Toast for Scan / Cart Feedback -->
+    <div id="pos-scan-notification" class="fixed top-5 left-1/2 -translate-x-1/2 z-[90] max-w-sm w-[90%] px-4 py-3 rounded-2xl shadow-xl text-white font-bold text-sm text-center transition-all duration-300 pointer-events-none opacity-0 -translate-y-6"></div>
+
+    <!-- Search Bar & Direct Camera Scanner -->
     <div
       class="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-brand-200 mb-3 md:mb-4 shrink-0"
     >
-      <div class="relative">
-        <span class="absolute left-3 top-3 text-gray-400 text-lg">🔍</span>
+      <div class="relative flex items-center">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg pointer-events-none">🔍</span>
         <input
           type="text"
+          id="pos-search-input"
           name="search"
-          placeholder="Buscar artículo..."
-          class="w-full p-3 pl-10 bg-brand-50 rounded-lg border border-brand-100 focus:ring-2 focus:ring-brand-500"
+          placeholder="Buscar artículo o escanear código..."
+          class="w-full p-3 pl-10 pr-28 sm:pr-32 bg-brand-50 rounded-lg border border-brand-100 focus:ring-2 focus:ring-brand-500 text-slate-800 text-sm md:text-base outline-none"
           hx-get="{% url 'search_products' %}"
           hx-trigger="keyup changed delay:200ms, search"
           hx-target="#pos-results"
           autofocus
           autocomplete="off"
         />
+        <button type="button" 
+                onclick="openPosCameraScanner()"
+                class="absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs transition active:scale-95 flex items-center gap-1.5 shadow-2xs"
+                title="Escanear código de barras con la cámara y agregar al carrito">
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            </svg>
+            <span>Cámara</span>
+        </button>
       </div>
     </div>
 
@@ -42,20 +56,25 @@
 
   <!-- Mobile: Floating Cart Button -->
   <button
+    id="mobile-floating-cart-bar"
     @click="cartOpen = true"
-    class="md:hidden fixed bottom-20 left-4 right-4 bg-brand-400 text-white shadow-2xl rounded-2xl p-4 flex justify-between items-center font-bold z-40 active:scale-95 transition hover:bg-brand-500"
+    class="md:hidden fixed bottom-20 left-4 right-4 bg-brand-500 hover:bg-brand-600 text-white shadow-xl rounded-2xl p-3.5 flex justify-between items-center font-bold z-40 active:scale-95 transition border border-brand-400/30"
     style="margin-bottom: env(safe-area-inset-bottom, 0px)"
   >
-    <span class="flex items-center gap-2">
-      <span class="text-xl">🛒</span>
-      <span>Carrito</span>
-    </span>
-    <span
-      id="mobile-cart-total"
-      class="bg-white text-brand-400 px-4 py-2 rounded-xl font-bold"
-    >
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-lg shadow-inner">
+        🛒
+      </div>
+      <div class="text-left">
+        <span class="block text-[10px] uppercase tracking-wider text-white/80 font-bold">Ver Carrito</span>
+        <span class="text-xs font-black text-white">
+          {{ cart_items|length }} artículo{{ cart_items|length|pluralize }}
+        </span>
+      </div>
+    </div>
+    <div class="bg-white text-slate-800 px-3.5 py-1.5 rounded-xl font-black font-mono text-sm shadow-xs border border-slate-100">
       ${{ cart_total|default:"0"|intcomma }}
-    </span>
+    </div>
   </button>
 
   <!-- Mobile: Bottom Sheet Cart -->
@@ -121,7 +140,7 @@
         id="cart-items"
         class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50 min-h-0"
       >
-        {% include 'pos/partials/cart_items.html' with cart=request.session.cart %}
+        {% include 'pos/partials/cart_item_rows.html' %}
       </div>
 
       <!-- Checkout Form -->
@@ -235,7 +254,7 @@
       id="cart-items-desktop"
       class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50"
     >
-      {% include 'pos/partials/cart_items.html' with cart=request.session.cart %}
+      {% include 'pos/partials/cart_item_rows.html' %}
     </div>
 
     <!-- Checkout Form -->
@@ -323,4 +342,79 @@
     </div>
   </div>
 </div>
+
+<script>
+function showPosNotification(msg, type = 'success') {
+    const el = document.getElementById('pos-scan-notification');
+    if (!el) return;
+    el.innerText = msg;
+    if (type === 'success') {
+        el.className = 'fixed top-5 left-1/2 -translate-x-1/2 z-[90] max-w-sm w-[90%] px-4 py-3 rounded-2xl shadow-xl text-white font-bold text-sm text-center transition-all duration-300 pointer-events-none bg-emerald-600 shadow-emerald-600/30 opacity-100 translate-y-0';
+    } else {
+        el.className = 'fixed top-5 left-1/2 -translate-x-1/2 z-[90] max-w-sm w-[90%] px-4 py-3 rounded-2xl shadow-xl text-white font-bold text-sm text-center transition-all duration-300 pointer-events-none bg-amber-600 shadow-amber-600/30 opacity-100 translate-y-0';
+    }
+    setTimeout(() => {
+        el.classList.replace('opacity-100', 'opacity-0');
+        el.classList.replace('translate-y-0', '-translate-y-6');
+    }, 2800);
+}
+
+// Escuchar evento itemAdded desde HTMX para mostrar feedback visual instantáneo
+document.body.addEventListener('itemAdded', function(evt) {
+    if (evt.detail && evt.detail.name) {
+        showPosNotification(`✅ Agregado: ${evt.detail.name} ($${Number(evt.detail.price).toLocaleString()})`, 'success');
+    }
+});
+
+function openPosCameraScanner() {
+    openBarcodeScanner('pos-search-input', (scannedBarcode) => {
+        // Enviar al endpoint de escaneo directo para sumar inmediatamente al carrito
+        fetch("{% url 'scan_and_add_to_cart' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: new URLSearchParams({ barcode: scannedBarcode })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                // Actualizar carritos mobile y desktop
+                const cartEl = document.getElementById('cart-items');
+                const cartDesktopEl = document.getElementById('cart-items-desktop');
+                if (cartEl) cartEl.innerHTML = data.cart_html;
+                if (cartDesktopEl) cartDesktopEl.innerHTML = data.cart_html;
+                
+                const mobileFloatingBar = document.getElementById('mobile-floating-cart-bar');
+                if (mobileFloatingBar) {
+                    const totalEl = mobileFloatingBar.querySelector('.font-mono');
+                    if (totalEl) totalEl.innerText = `$${Number(data.cart_total).toLocaleString()}`;
+                    const countEl = mobileFloatingBar.querySelector('.text-xs.font-black');
+                    if (countEl && data.cart_count !== undefined) {
+                        countEl.innerText = `${data.cart_count} artículo${data.cart_count === 1 ? '' : 's'}`;
+                    }
+                }
+                
+                showPosNotification(`✅ Agregado: ${data.product_name} ($${Number(data.price).toLocaleString()})`, 'success');
+            } else {
+                const searchInput = document.getElementById('pos-search-input');
+                if (searchInput) {
+                    searchInput.value = scannedBarcode;
+                    htmx.trigger(searchInput, 'search');
+                }
+                showPosNotification(data.message || `No se encontró producto con código: ${scannedBarcode}`, 'warning');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            const searchInput = document.getElementById('pos-search-input');
+            if (searchInput) {
+                searchInput.value = scannedBarcode;
+                htmx.trigger(searchInput, 'search');
+            }
+        });
+    });
+}
+</script>
 {% endblock %}

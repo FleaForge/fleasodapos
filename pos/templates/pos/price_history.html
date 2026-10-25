@@ -1,0 +1,157 @@
+{% extends 'pos/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="space-y-6 pb-20">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <div>
+            <div class="flex items-center gap-2 mb-1">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black bg-brand-100 text-brand-500 border border-brand-200">
+                    Auditoría de Precios
+                </span>
+                <span class="text-xs text-slate-400 font-medium">Registro cronológico</span>
+            </div>
+            <h1 class="text-2xl font-black text-slate-800 tracking-tight">Historial de Cambios de Precios</h1>
+            <p class="text-xs sm:text-sm text-slate-500 mt-0.5">Control y trazabilidad de modificaciones en costos, precios de venta y rentabilidad.</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <a href="{% url 'inventory' %}" 
+               class="inline-flex items-center justify-center gap-1.5 text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition active:scale-95 border border-slate-200">
+                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                <span>Volver al Inventario</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Search & Filters -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        <form method="get" class="flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+                <input 
+                    type="text" 
+                    name="search" 
+                    value="{{ query }}"
+                    placeholder="Buscar por producto, código de barras, usuario o motivo..."
+                    class="w-full bg-slate-50 hover:bg-white focus:bg-white text-slate-800 pl-11 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition outline-none text-sm"
+                />
+                <span class="absolute left-3.5 top-3 text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </span>
+            </div>
+            <button type="submit" class="px-5 py-2.5 bg-brand-500 hover:bg-brand-400 text-white font-bold rounded-xl text-sm transition shadow-2xs">
+                Buscar
+            </button>
+            {% if query %}
+            <a href="{% url 'global_price_history' %}" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition text-center">
+                Limpiar
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Results Table -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-600">
+                Cambios Registrados ({{ total_changes }})
+            </span>
+            <span class="text-xs text-slate-400">Mostrando los registros más recientes</span>
+        </div>
+
+        {% if history %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs sm:text-sm">
+                <thead class="bg-slate-100/70 border-b border-slate-200 text-slate-700 font-black">
+                    <tr>
+                        <th class="py-3 px-4">Fecha y Hora</th>
+                        <th class="py-3 px-4">Producto</th>
+                        <th class="py-3 px-4">Costo Compra</th>
+                        <th class="py-3 px-4">Precio Venta (PVP)</th>
+                        <th class="py-3 px-4">Rentabilidad</th>
+                        <th class="py-3 px-4">Usuario / Motivo</th>
+                        <th class="py-3 px-4 text-right">Acción</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for item in history %}
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        <td class="py-3.5 px-4 whitespace-nowrap">
+                            <span class="font-bold text-slate-800 block">{{ item.date|date:"d M Y" }}</span>
+                            <span class="text-xs text-slate-400">{{ item.date|date:"h:i A" }}</span>
+                        </td>
+                        <td class="py-3.5 px-4">
+                            <a href="{% url 'edit_product' item.product.id %}" class="font-black text-brand-500 hover:underline block text-sm">
+                                {{ item.product.name }}
+                            </a>
+                            <span class="text-xs text-slate-400 font-mono">
+                                {% if item.product.barcode %}{{ item.product.barcode }}{% else %}Sin código{% endif %}
+                            </span>
+                        </td>
+                        <td class="py-3.5 px-4 whitespace-nowrap font-mono">
+                            <div class="flex items-center gap-1.5">
+                                {% if item.old_cost_price != item.new_cost_price %}
+                                <span class="text-slate-400 line-through text-xs">${{ item.old_cost_price|intcomma }}</span>
+                                <span class="text-slate-400 text-xs">➔</span>
+                                {% endif %}
+                                <span class="font-bold text-slate-800">${{ item.new_cost_price|intcomma }}</span>
+                            </div>
+                            {% if item.cost_diff != 0 %}
+                            <span class="text-[11px] {% if item.cost_diff > 0 %}text-amber-600{% else %}text-emerald-600{% endif %} font-bold block">
+                                {% if item.cost_diff > 0 %}+{% endif %}${{ item.cost_diff|intcomma }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3.5 px-4 whitespace-nowrap font-mono">
+                            <div class="flex items-center gap-1.5">
+                                {% if item.old_price != item.new_price %}
+                                <span class="text-slate-400 line-through text-xs">${{ item.old_price|intcomma }}</span>
+                                <span class="text-slate-400 text-xs">➔</span>
+                                {% endif %}
+                                <span class="font-bold text-brand-600">${{ item.new_price|intcomma }}</span>
+                            </div>
+                            {% if item.price_diff != 0 %}
+                            <span class="text-[11px] {% if item.price_diff > 0 %}text-emerald-600{% else %}text-rose-600{% endif %} font-bold block">
+                                {% if item.price_diff > 0 %}+{% endif %}${{ item.price_diff|intcomma }} ({{ item.price_diff_percent }}%)
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3.5 px-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-black {% if item.new_profit > 0 %}bg-emerald-50 text-emerald-700 border border-emerald-200{% elif item.new_profit == 0 %}bg-amber-50 text-amber-700 border border-amber-200{% else %}bg-rose-50 text-rose-700 border border-rose-200{% endif %}">
+                                +{{ item.new_margin_markup }}% Rentabilidad
+                            </span>
+                            <span class="text-xs text-slate-500 block font-medium mt-0.5">
+                                Ganancia: ${{ item.new_profit|intcomma }}
+                            </span>
+                        </td>
+                        <td class="py-3.5 px-4">
+                            <span class="font-bold text-slate-700 block">{{ item.user.username|default:"Sistema" }}</span>
+                            <span class="text-xs text-slate-500 italic">{{ item.reason|default:"Actualización general" }}</span>
+                        </td>
+                        <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                            <a href="{% url 'edit_product' item.product.id %}" class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-brand-50 hover:text-brand-600 text-slate-700 rounded-lg text-xs font-bold transition">
+                                <span>✏️</span> Editar
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-12 text-center text-slate-400">
+            <svg class="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            <p class="text-base font-bold text-slate-600">No se encontraron registros de cambios de precio</p>
+            <p class="text-xs text-slate-400 mt-1">Los cambios de precio realizados en productos se archivarán aquí automáticamente.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

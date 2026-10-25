@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -140,3 +141,15 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Enable WhiteNoise compression and caching
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Media files (Product images, receipts, uploads)
+# ==============================================================================
+# CONFIGURACIÓN PERSISTENTE PARA COOLIFY Y PRODUCCIÓN
+# ==============================================================================
+# En Coolify, los contenedores son efímeros. Para evitar que las fotos subidas se borren
+# al reiniciar o redesplegar, guardamos por defecto en BASE_DIR / 'db' / 'media'
+# (dentro de la carpeta /app/db montada como volumen persistente de SQLite en Coolify).
+# Si el usuario configura otra ruta mediante la variable de entorno MEDIA_ROOT, se respeta.
+MEDIA_URL = '/media/'
+MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / 'db' / 'media'))
+MEDIA_ROOT.mkdir(parents=True, exist_ok=True)

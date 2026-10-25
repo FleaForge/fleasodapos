@@ -2,9 +2,9 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Sum, Q, F, Count
 from django.utils import timezone
 from django.contrib import messages
-from django.http import HttpResponse
-from .models import Product, Client, Sale, SaleItem, Payment
-from django.template.loader import get_template
+from django.http import HttpResponse, JsonResponse
+from .models import Product, ProductPriceHistory, Client, Sale, SaleItem, Payment
+from django.template.loader import get_template, render_to_string
 from xhtml2pdf import pisa
 import json
 
@@ -129,9 +129,32 @@ def inventory(request):
     if request.htmx:
         query = request.GET.get('search')
         if query:
-            products = products.filter(name__icontains=query)
+            products = products.filter(Q(name__icontains=query) | Q(barcode__icontains=query))
         return render(request, 'pos/partials/product_list.html', {'products': products})
-    return render(request, 'pos/inventory.html', {'products': products})
+
+    # Resumen de inventario y rentabilidad
+    total_products = products.count()
+    low_stock_count = products.filter(stock__lte=5).count()
+    total_cost_valuation = sum(p.cost_valuation for p in products)
+    total_sale_valuation = sum(p.sale_valuation for p in products)
+    total_potential_profit = total_sale_valuation - total_cost_valuation
+    avg_markup = round((total_potential_profit / total_cost_valuation * 100), 1) if total_cost_valuation > 0 else 0
+    avg_margin = round((total_potential_profit / total_sale_valuation * 100), 1) if total_sale_valuation > 0 else 0
+
+    recent_price_changes = ProductPriceHistory.objects.select_related('product', 'user').order_by('-date')[:6]
+
+    context = {
+        'products': products,
+        'total_products': total_products,
+        'low_stock_count': low_stock_count,
+        'total_cost_valuation': total_cost_valuation,
+        'total_sale_valuation': total_sale_valuation,
+        'total_potential_profit': total_potential_profit,
+        'avg_markup': avg_markup,
+        'avg_margin': avg_margin,
+        'recent_price_changes': recent_price_changes,
+    }
+    return render(request, 'pos/inventory.html', context)
 
 @login_required
 def clients(request):
@@ -554,12 +577,65 @@ def pos(request):
 
 @login_required
 def search_products(request):
-    query = request.GET.get('search')
+    query = request.GET.get('search', '').strip()
     if query:
-        products = Product.objects.filter(name__icontains=query)
+        products = Product.objects.filter(Q(name__icontains=query) | Q(barcode__icontains=query))
     else:
         products = []
     return render(request, 'pos/partials/pos_product_search.html', {'products': products})
+
+@login_required
+def scan_and_add_to_cart(request):
+    """
+    Escaneo directo con cámara en el POS:
+    Busca por código de barras exacto o ID, suma 1 unidad al carrito y retorna el HTML actualizado del carrito.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
+        
+    barcode = request.POST.get('barcode', '').strip()
+    if not barcode:
+        return JsonResponse({'success': False, 'message': 'Código vacío'}, status=400)
+        
+    product = Product.objects.filter(barcode=barcode).first()
+    if not product and barcode.isdigit():
+        product = Product.objects.filter(id=int(barcode)).first()
+        
+    if not product:
+        return JsonResponse({
+            'success': False, 
+            'message': f'Producto con código "{barcode}" no encontrado en inventario.'
+        }, status=404)
+        
+    cart = request.session.get('cart', {})
+    product_id_str = str(product.id)
+    
+    if product_id_str in cart:
+        cart[product_id_str]['quantity'] += 1
+    else:
+        cart[product_id_str] = {
+            'id': product.id,
+            'name': product.name,
+            'price': product.price,
+            'quantity': 1,
+        }
+    request.session['cart'] = cart
+    
+    cart_items, cart_total = get_cart_data(request.session)
+    cart_html = render_to_string('pos/partials/cart_item_rows.html', {
+        'cart_items': cart_items, 
+        'cart_total': cart_total
+    }, request=request)
+    
+    return JsonResponse({
+        'success': True,
+        'product_id': product.id,
+        'product_name': product.name,
+        'price': product.price,
+        'cart_count': len(cart_items),
+        'cart_total': cart_total,
+        'cart_html': cart_html
+    })
 
 @login_required
 def add_to_cart(request):
@@ -591,7 +667,16 @@ def add_to_cart(request):
     request.session['cart'] = cart
     
     cart_items, cart_total = get_cart_data(request.session)
-    return render(request, 'pos/partials/cart_items.html', {'cart_items': cart_items, 'cart_total': cart_total})
+    response = render(request, 'pos/partials/cart_items.html', {'cart_items': cart_items, 'cart_total': cart_total})
+    import json
+    response['HX-Trigger'] = json.dumps({
+        'itemAdded': {
+            'name': product.name,
+            'price': product.price,
+            'total': cart_total
+        }
+    })
+    return response
 
 @login_required
 def update_cart_item(request):
@@ -667,7 +752,8 @@ def checkout(request):
                 sale=sale,
                 product=product,
                 quantity=item['quantity'],
-                price=item['price']
+                price=item['price'],
+                cost_price=product.cost_price
             )
             # Update stock
             product.stock -= item['quantity']
@@ -682,18 +768,47 @@ def checkout(request):
 @login_required
 def add_product(request):
     if request.method == 'POST':
-        name = request.POST.get('name')
-        barcode = request.POST.get('barcode')
-        price = request.POST.get('price')
-        stock = request.POST.get('stock')
+        name = request.POST.get('name', '').strip()
+        barcode = request.POST.get('barcode', '').strip() or None
         
-        Product.objects.create(
+        try:
+            cost_price = int(float(request.POST.get('cost_price') or 0))
+        except (ValueError, TypeError):
+            cost_price = 0
+            
+        try:
+            price = int(float(request.POST.get('price') or 0))
+        except (ValueError, TypeError):
+            price = 0
+            
+        try:
+            stock = int(request.POST.get('stock') or 0)
+        except (ValueError, TypeError):
+            stock = 0
+            
+        image = request.FILES.get('image')
+
+        product = Product.objects.create(
             name=name,
             barcode=barcode,
+            cost_price=cost_price,
             price=price,
-            stock=stock
+            stock=stock,
+            image=image
         )
-        messages.success(request, 'Producto agregado correctamente.')
+        
+        # Registrar en Historial de Precios
+        ProductPriceHistory.objects.create(
+            product=product,
+            old_price=0,
+            new_price=price,
+            old_cost_price=0,
+            new_cost_price=cost_price,
+            user=request.user if request.user.is_authenticated else None,
+            reason=request.POST.get('price_change_reason', '').strip() or 'Precio inicial de creación'
+        )
+        
+        messages.success(request, f'Producto "{product.name}" agregado correctamente.')
     return redirect('inventory')
 
 @login_required
@@ -881,28 +996,75 @@ def report_analytics(request):
             'method_filter': method_filter,
         })
 
-    # 1. Sales by Product (Quantity) for period
-    product_sales = SaleItem.objects.filter(sale__in=active_period_sales).values('product__name').annotate(
-        total_qty=Sum('quantity'),
-        total_amount=Sum(F('quantity') * F('price'))
-    ).order_by('-total_qty')[:10] 
+    # 1. Period Items & Financial / Profitability Aggregations
+    period_items = SaleItem.objects.filter(sale__in=active_period_sales).select_related('product', 'sale')
     
-    labels_products = [item['product__name'] for item in product_sales]
-    data_products = [item['total_qty'] for item in product_sales]
+    total_cost_period = 0
+    product_perf = {}
     
-    # 2. Daily Sales Trend for period
-    daily_sales = active_period_sales.values('date__date').annotate(
-        daily_total=Sum('total')
-    ).order_by('date__date')
-    
-    labels_dates = [item['date__date'].strftime('%d/%m') for item in daily_sales]
-    data_sales = [int(item['daily_total']) for item in daily_sales]
-    
+    for item in period_items:
+        qty = item.quantity
+        rev = item.subtotal
+        cost_unit = item.effective_cost_price
+        c = qty * cost_unit
+        p = rev - c
+        total_cost_period += c
+        
+        pid = item.product_id
+        if pid not in product_perf:
+            product_perf[pid] = {
+                'id': pid,
+                'name': item.product.name if item.product else 'Artículo sin nombre',
+                'barcode': item.product.barcode if (item.product and item.product.barcode) else None,
+                'image': item.product.image.url if (item.product and item.product.image) else None,
+                'qty': 0,
+                'revenue': 0,
+                'cost': 0,
+                'profit': 0,
+            }
+        product_perf[pid]['qty'] += qty
+        product_perf[pid]['revenue'] += rev
+        product_perf[pid]['cost'] += c
+        product_perf[pid]['profit'] += p
+
+    for p in product_perf.values():
+        p['margin_profit'] = round((p['profit'] / p['revenue'] * 100), 1) if p['revenue'] > 0 else 0.0
+        p['margin_markup'] = round((p['profit'] / p['cost'] * 100), 1) if p['cost'] > 0 else (100.0 if p['profit'] > 0 else 0.0)
+
+    # Top 10 by Profit ($ COP)
+    top_profitable_products = sorted(product_perf.values(), key=lambda x: x['profit'], reverse=True)[:10]
+    # Top 10 by Units (Volume)
+    top_volume_products = sorted(product_perf.values(), key=lambda x: x['qty'], reverse=True)[:10]
+
+    labels_products = [p['name'] for p in top_volume_products]
+    data_products = [p['qty'] for p in top_volume_products]
+
+    # 2. Daily Sales & Profit Trend for period
+    daily_map = {}
+    for sale in active_period_sales.prefetch_related('items__product'):
+        d = sale.date.date()
+        if d not in daily_map:
+            daily_map[d] = {'sales': 0, 'cost': 0, 'profit': 0}
+        daily_map[d]['sales'] += sale.total
+        daily_map[d]['cost'] += sale.total_cost
+        daily_map[d]['profit'] += sale.total_profit
+
+    sorted_days = sorted(daily_map.keys())
+    labels_dates = [d.strftime('%d/%m') for d in sorted_days]
+    data_sales = [int(daily_map[d]['sales']) for d in sorted_days]
+    data_profits = [int(daily_map[d]['profit']) for d in sorted_days]
+
     # 3. KPI Metrics for period
     total_period = active_period_sales.aggregate(Sum('total'))['total__sum'] or 0
     count_period = active_period_sales.count()
     avg_ticket = total_period / count_period if count_period > 0 else 0
     
+    total_profit_period = total_period - total_cost_period
+    margin_profit_pct = round((total_profit_period / total_period * 100), 1) if total_period > 0 else 0.0
+    margin_markup_pct = round((total_profit_period / total_cost_period * 100), 1) if total_cost_period > 0 else (100.0 if total_profit_period > 0 else 0.0)
+    avg_profit_per_ticket = round(total_profit_period / count_period) if count_period > 0 else 0
+    star_product = top_profitable_products[0] if top_profitable_products else None
+
     cash_total = active_period_sales.filter(payment_method='CASH').aggregate(Sum('total'))['total__sum'] or 0
     credit_total = active_period_sales.filter(payment_method='CREDIT').aggregate(Sum('total'))['total__sum'] or 0
     annulled_period = Sale.objects.filter(
@@ -952,6 +1114,7 @@ def report_analytics(request):
         'data_products': data_products,
         'labels_dates': labels_dates,
         'data_sales': data_sales,
+        'data_profits': data_profits,
         'invoices': sales_qs,
         'date_start': date_start.strftime('%Y-%m-%d'),
         'date_end': date_end.strftime('%Y-%m-%d'),
@@ -962,6 +1125,14 @@ def report_analytics(request):
         'credit_total': credit_total,
         'adjustments_total': adjustments_total,
         'annulled_period': annulled_period_count,
+        # Rentabilidad y Métricas Financieras
+        'total_cost_period': total_cost_period,
+        'total_profit_period': total_profit_period,
+        'margin_profit_pct': margin_profit_pct,
+        'margin_markup_pct': margin_markup_pct,
+        'avg_profit_per_ticket': avg_profit_per_ticket,
+        'top_profitable_products': top_profitable_products,
+        'star_product': star_product,
         'search_query': search_query,
         'status_filter': status_filter,
         'method_filter': method_filter,
@@ -1059,19 +1230,109 @@ def manifest(request):
 def edit_product(request, product_id):
     product = get_object_or_404(Product, id=product_id)
     if request.method == 'POST':
-        product.name = request.POST.get('name')
-        product.barcode = request.POST.get('barcode')
-        product.price = request.POST.get('price')
+        old_price = product.price
+        old_cost_price = product.cost_price
+        
+        product.name = request.POST.get('name', '').strip()
+        barcode_val = request.POST.get('barcode', '').strip()
+        product.barcode = barcode_val if barcode_val else None
+        
+        try:
+            new_cost_price = int(float(request.POST.get('cost_price') or 0))
+        except (ValueError, TypeError):
+            new_cost_price = old_cost_price
+            
+        try:
+            new_price = int(float(request.POST.get('price') or 0))
+        except (ValueError, TypeError):
+            new_price = old_price
+            
+        product.cost_price = new_cost_price
+        product.price = new_price
         
         stock_val = request.POST.get('stock')
-        if stock_val:
-             product.stock = stock_val
-             
+        if stock_val is not None and stock_val != '':
+            try:
+                product.stock = int(stock_val)
+            except ValueError:
+                pass
+                
+        if 'image' in request.FILES:
+            if product.image:
+                try:
+                    product.image.delete(save=False)
+                except Exception:
+                    pass
+            product.image = request.FILES['image']
+        elif request.POST.get('clear_image') == 'true':
+            if product.image:
+                try:
+                    product.image.delete(save=False)
+                except Exception:
+                    pass
+            product.image = None
+
         product.save()
-        messages.success(request, 'Producto actualizado correctamente.')
+        
+        # Detectar si hubo cambio de precio o costo
+        if old_price != new_price or old_cost_price != new_cost_price:
+            reason = request.POST.get('price_change_reason', '').strip()
+            if not reason:
+                parts = []
+                if old_price != new_price:
+                    parts.append(f"Venta: ${old_price:,} ➔ ${new_price:,}")
+                if old_cost_price != new_cost_price:
+                    parts.append(f"Costo: ${old_cost_price:,} ➔ ${new_cost_price:,}")
+                reason = "Actualización de precios (" + ", ".join(parts) + ")"
+                
+            ProductPriceHistory.objects.create(
+                product=product,
+                old_price=old_price,
+                new_price=new_price,
+                old_cost_price=old_cost_price,
+                new_cost_price=new_cost_price,
+                user=request.user if request.user.is_authenticated else None,
+                reason=reason
+            )
+            messages.success(request, 'Producto actualizado y cambio de precio registrado en el historial.')
+        else:
+            messages.success(request, 'Producto actualizado correctamente.')
+            
         return redirect('inventory')
         
-    return render(request, 'pos/edit_product.html', {'product': product})
+    price_history = product.price_history.select_related('user').order_by('-date')
+    return render(request, 'pos/edit_product.html', {
+        'product': product,
+        'price_history': price_history
+    })
+
+@login_required
+def product_price_history(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    history = product.price_history.select_related('user').order_by('-date')
+    return render(request, 'pos/partials/product_price_history_modal.html', {
+        'product': product,
+        'history': history
+    })
+
+@login_required
+def global_price_history(request):
+    history_qs = ProductPriceHistory.objects.select_related('product', 'user').order_by('-date')
+    query = request.GET.get('search', '').strip()
+    if query:
+        history_qs = history_qs.filter(
+            Q(product__name__icontains=query) | 
+            Q(product__barcode__icontains=query) |
+            Q(reason__icontains=query) |
+            Q(user__username__icontains=query)
+        )
+    
+    total_changes = history_qs.count()
+    return render(request, 'pos/price_history.html', {
+        'history': history_qs[:150],
+        'total_changes': total_changes,
+        'query': query,
+    })
 
 @login_required
 def add_stock(request, product_id):
@@ -1171,7 +1432,8 @@ def add_product_to_sale(request, sale_id):
                 sale=sale,
                 product=product,
                 quantity=1,
-                price=product.price
+                price=product.price,
+                cost_price=product.cost_price
             )
         
         # Update stock

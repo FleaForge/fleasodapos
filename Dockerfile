@@ -37,13 +37,10 @@ COPY . /app/
 RUN npm install
 RUN npm run build:css
 
-# Create necessary directories and set permissions for SQLite
-# In container, user might be root or appuser. 
-# We ensure DB path is writable.
-RUN mkdir -p /app/data /app/db
-# If you mount a volume to /app/db.sqlite3, that works too.
-# For coolify/production with sqlite, best to use a volume for the db file.
-# We will assume startup script handles migrations if db is fresh.
+# Create necessary directories and set permissions for SQLite and Persistent Media in Coolify
+RUN mkdir -p /app/data /app/db /app/db/media /app/media \
+    && chmod -R 777 /app/db /app/data /app/media
+# In Coolify: Mount persistent storage to /app/db (which preserves both SQLite db.sqlite3 and media/ photos)
 
 # Collect static files
 RUN python manage.py collectstatic --noinput
