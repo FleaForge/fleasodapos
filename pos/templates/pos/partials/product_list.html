@@ -48,6 +48,26 @@
                 </span>
             </div>
         </div>
+
+        <!-- Valor Total del Inventario de este Producto -->
+        <div class="pt-2 border-t border-slate-200/80 flex justify-between items-center bg-brand-50/70 -mx-3 -mb-3 p-2.5 rounded-b-xl border-t border-brand-100">
+            <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-brand-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                </svg>
+                <span>Valor en Stock:</span>
+            </span>
+            <div class="text-right">
+                <span class="text-sm font-black text-brand-700 font-mono">
+                    ${{ product.sale_valuation|intcomma }}
+                </span>
+                {% if product.stock > 0 and product.cost_price > 0 %}
+                <span class="block text-[10px] text-slate-400 font-mono">
+                    (Costo: ${{ product.cost_valuation|intcomma }})
+                </span>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
     <!-- Actions Footer -->

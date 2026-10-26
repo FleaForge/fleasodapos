@@ -60,6 +60,10 @@ def dashboard(request):
     
     # 5. Inventario & Clientes
     total_products = Product.objects.count()
+    total_stock_units = Product.objects.aggregate(Sum('stock'))['stock__sum'] or 0
+    all_products = list(Product.objects.all())
+    total_inventory_valuation = sum(p.sale_valuation for p in all_products)
+    total_inventory_cost = sum(p.cost_valuation for p in all_products)
     low_stock_products = Product.objects.filter(stock__lte=5).order_by('stock')[:5]
     low_stock_count = Product.objects.filter(stock__lte=5).count()
     total_clients = Client.objects.count()
@@ -107,6 +111,9 @@ def dashboard(request):
         'monthly_credit': monthly_credit,
         'monthly_payments': monthly_payments,
         'total_products': total_products,
+        'total_stock_units': total_stock_units,
+        'total_inventory_valuation': total_inventory_valuation,
+        'total_inventory_cost': total_inventory_cost,
         'low_stock_count': low_stock_count,
         'low_stock_products': low_stock_products,
         'total_clients': total_clients,
@@ -135,23 +142,36 @@ def inventory(request):
     # Resumen de inventario y rentabilidad
     total_products = products.count()
     low_stock_count = products.filter(stock__lte=5).count()
+    out_of_stock_count = products.filter(stock__lte=0).count()
+    in_stock_count = products.filter(stock__gt=5).count()
+    total_stock_units = products.aggregate(Sum('stock'))['stock__sum'] or 0
+
     total_cost_valuation = sum(p.cost_valuation for p in products)
     total_sale_valuation = sum(p.sale_valuation for p in products)
     total_potential_profit = total_sale_valuation - total_cost_valuation
     avg_markup = round((total_potential_profit / total_cost_valuation * 100), 1) if total_cost_valuation > 0 else 0
     avg_margin = round((total_potential_profit / total_sale_valuation * 100), 1) if total_sale_valuation > 0 else 0
 
+    # Top 10 productos con mayor valor comercial en bodega
+    top_valued_products = sorted([p for p in products if p.stock > 0], key=lambda x: x.sale_valuation, reverse=True)[:10]
+    for p in top_valued_products:
+        p.valuation_share = round((p.sale_valuation / total_sale_valuation * 100), 1) if total_sale_valuation > 0 else 0.0
+
     recent_price_changes = ProductPriceHistory.objects.select_related('product', 'user').order_by('-date')[:6]
 
     context = {
         'products': products,
         'total_products': total_products,
+        'total_stock_units': total_stock_units,
         'low_stock_count': low_stock_count,
+        'out_of_stock_count': out_of_stock_count,
+        'in_stock_count': in_stock_count,
         'total_cost_valuation': total_cost_valuation,
         'total_sale_valuation': total_sale_valuation,
         'total_potential_profit': total_potential_profit,
         'avg_markup': avg_markup,
         'avg_margin': avg_margin,
+        'top_valued_products': top_valued_products,
         'recent_price_changes': recent_price_changes,
     }
     return render(request, 'pos/inventory.html', context)
@@ -1197,6 +1217,39 @@ def client_statement_pdf(request, client_id):
     
     if pisa_status.err:
         return HttpResponse('We had some errors <pre>' + html + '</pre>')
+    return response
+
+@login_required
+def inventory_valuation_pdf(request):
+    products = Product.objects.all().order_by('name')
+    total_products = products.count()
+    total_stock_units = products.aggregate(Sum('stock'))['stock__sum'] or 0
+    total_cost_valuation = sum(p.cost_valuation for p in products)
+    total_sale_valuation = sum(p.sale_valuation for p in products)
+    total_potential_profit = total_sale_valuation - total_cost_valuation
+    avg_markup = round((total_potential_profit / total_cost_valuation * 100), 1) if total_cost_valuation > 0 else 0
+
+    context = {
+        'products': products,
+        'total_products': total_products,
+        'total_stock_units': total_stock_units,
+        'total_cost_valuation': total_cost_valuation,
+        'total_sale_valuation': total_sale_valuation,
+        'total_potential_profit': total_potential_profit,
+        'avg_markup': avg_markup,
+        'now': timezone.now(),
+    }
+    
+    template_path = 'pos/pdf/inventory_valuation_pdf.html'
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="Valorizacion_Inventario.pdf"'
+    
+    template = get_template(template_path)
+    html = template.render(context)
+    
+    pisa_status = pisa.CreatePDF(html, dest=response)
+    if pisa_status.err:
+        return HttpResponse('Error generando PDF de valorización: <pre>' + html + '</pre>')
     return response
 
 def service_worker(request):

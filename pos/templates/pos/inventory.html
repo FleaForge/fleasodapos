@@ -6,6 +6,7 @@
     newProductOpen: false, 
     historyOpen: false,
     calcOpen: false,
+    valuationOpen: false,
     newProd: {
         cost: 0,
         price: 0,
@@ -80,7 +81,7 @@
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-black bg-brand-100 text-brand-500 border border-brand-200">
                     Gestión Comercial
                 </span>
-                <span class="text-xs text-slate-400 font-medium">{{ total_products }} artículos</span>
+                <span class="text-xs text-slate-400 font-medium">{{ total_products }} artículos &bull; {{ total_stock_units|intcomma }} unidades en stock</span>
             </div>
             <h1 class="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">Inventario y Precios</h1>
             <p class="text-xs text-slate-500 mt-0.5 hidden sm:block">Control de existencias, cálculo de rentabilidad en tiempo real e historial de precios.</p>
@@ -96,8 +97,18 @@
                 <span>Nuevo Producto</span>
             </button>
 
-            <!-- Acciones Secundarias (Grid 2 columnas en móvil) -->
-            <div class="grid grid-cols-2 sm:flex sm:items-center gap-2">
+            <!-- Acciones Secundarias (Grid 3 columnas en móvil) -->
+            <div class="grid grid-cols-3 sm:flex sm:items-center gap-2">
+                <!-- Botón Resumen de Valorización -->
+                <button type="button" @click="valuationOpen = true" 
+                        class="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-xs sm:text-sm transition active:scale-95 border border-emerald-200 text-center"
+                        title="Ver balance financiero y valorización del inventario">
+                    <svg class="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    <span>Valorización</span>
+                </button>
+
                 <!-- Botón Historial General de Precios -->
                 <a href="{% url 'global_price_history' %}" 
                    class="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs sm:text-sm transition active:scale-95 border border-slate-200/90 text-center"
@@ -142,9 +153,10 @@
         </div>
 
         <!-- 2. Valoración de Venta (PVP) -->
-        <div class="bg-white p-3 sm:p-5 rounded-2xl shadow-2xs border border-slate-200/90 flex flex-col justify-between">
+        <div class="bg-white p-3 sm:p-5 rounded-2xl shadow-2xs border border-slate-200/90 flex flex-col justify-between cursor-pointer hover:border-brand-400 transition"
+             @click="valuationOpen = true" title="Clic para ver desglose completo de valorización">
             <div class="flex items-center justify-between gap-1 mb-1">
-                <span class="text-[10px] sm:text-xs font-bold text-brand-500 uppercase tracking-wider truncate" title="Valor Estimado Venta"><span class="sm:hidden">Venta Est.</span><span class="hidden sm:inline">Valor Estimado Venta</span></span>
+                <span class="text-[10px] sm:text-xs font-bold text-brand-500 uppercase tracking-wider truncate" title="Valor Estimado Venta"><span class="sm:hidden">Valor Inv. (PVP)</span><span class="hidden sm:inline">Valor Inventario (PVP)</span></span>
                 <div class="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-brand-50 text-brand-500 flex items-center justify-center shrink-0">
                     <svg class="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -155,7 +167,7 @@
                 <span class="text-base sm:text-2xl font-black text-brand-600 font-mono block">
                     ${{ total_sale_valuation|intcomma }}
                 </span>
-                <span class="text-[10px] sm:text-[11px] text-slate-400 block truncate">Ingreso potencial 100%</span>
+                <span class="text-[10px] sm:text-[11px] text-slate-400 block truncate" title="Valor Estimado Venta">{{ total_stock_units|intcomma }} unids. &bull; Ingreso potencial 100% (Valor Estimado Venta)</span>
             </div>
         </div>
 
@@ -586,6 +598,150 @@
                 <div class="pt-2 flex justify-end">
                     <button type="button" @click="calcOpen = false" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition">
                         Cerrar Simulador
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Resumen Ejecutivo de Valorización de Inventario -->
+    <div x-show="valuationOpen" 
+         x-transition.opacity 
+         class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-3 sm:p-4" 
+         style="display: none;"
+         @keydown.escape.window="valuationOpen = false">
+        <div class="bg-white rounded-3xl max-w-3xl w-full p-5 sm:p-7 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto"
+             @click.outside="valuationOpen = false">
+             
+            <!-- Header Modal -->
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl font-black shrink-0">
+                        📊
+                    </div>
+                    <div>
+                        <h3 class="text-lg sm:text-xl font-black text-slate-800">Valorización General del Inventario</h3>
+                        <p class="text-xs text-slate-500">Balance financiero de existencias y capital comercial</p>
+                    </div>
+                </div>
+                <button @click="valuationOpen = false" class="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 text-xl font-bold transition">
+                    ✕
+                </button>
+            </div>
+
+            <!-- Gran Tarjeta de Valor Total -->
+            <div class="mt-5 p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-brand-900 text-white shadow-md">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">Valor Comercial del Inventario (a PVP)</span>
+                        <h2 class="text-3xl sm:text-4xl font-black font-mono text-white mt-1">
+                            ${{ total_sale_valuation|intcomma }} COP
+                        </h2>
+                        <p class="text-xs text-slate-300 mt-1">
+                            Capital total a recaudar si se venden todas las existencias actuales
+                        </p>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-3 sm:text-right shrink-0">
+                        <span class="block text-[10px] uppercase font-bold text-white/70">Unidades Físicas</span>
+                        <span class="text-2xl font-black text-emerald-300 font-mono">{{ total_stock_units|intcomma }}</span>
+                        <span class="block text-[10px] text-white/70">en {{ total_products }} productos</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grid de Métricas Secundarias -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+                <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                    <span class="text-[11px] font-bold text-slate-500 uppercase">Inversión a Costo</span>
+                    <p class="text-xl font-black text-slate-800 font-mono mt-0.5">${{ total_cost_valuation|intcomma }}</p>
+                    <span class="text-[10px] text-slate-400">Costo compra mercancía</span>
+                </div>
+
+                <div class="bg-emerald-50/70 p-3.5 rounded-2xl border border-emerald-200/80">
+                    <span class="text-[11px] font-bold text-emerald-700 uppercase">Ganancia Proyectada</span>
+                    <p class="text-xl font-black text-emerald-700 font-mono mt-0.5">${{ total_potential_profit|intcomma }}</p>
+                    <span class="text-[10px] text-emerald-600 font-medium">+{{ avg_markup }}% rent. prom.</span>
+                </div>
+
+                <div class="bg-blue-50/70 p-3.5 rounded-2xl border border-blue-200/80">
+                    <span class="text-[11px] font-bold text-blue-700 uppercase">Salud de Stock</span>
+                    <div class="flex items-center gap-2 mt-1 text-xs">
+                        <span class="font-bold text-emerald-700">🟢 {{ in_stock_count }} ok</span>
+                        <span class="font-bold text-amber-700">🟡 {{ low_stock_count }} bajo</span>
+                        <span class="font-bold text-rose-700">🔴 {{ out_of_stock_count }} agotado</span>
+                    </div>
+                    <span class="text-[10px] text-slate-400 mt-1 block">Distribución de artículos</span>
+                </div>
+            </div>
+
+            <!-- Top 10 Productos con Mayor Valor en Stock -->
+            <div class="mt-6">
+                <div class="flex items-center justify-between mb-2.5">
+                    <h4 class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <span>💎</span>
+                        <span>Artículos con Mayor Capital en Bodega (Top 10)</span>
+                    </h4>
+                    <span class="text-[11px] text-slate-400">Concentración del dinero</span>
+                </div>
+
+                <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="bg-slate-100/90 text-slate-600 font-bold border-b border-slate-200">
+                                <th class="py-2.5 px-3">Producto</th>
+                                <th class="py-2.5 px-3 text-center">Stock</th>
+                                <th class="py-2.5 px-3 text-right">PVP Unit.</th>
+                                <th class="py-2.5 px-3 text-right font-black text-slate-800">Valor Total</th>
+                                <th class="py-2.5 px-3 text-right">% Inv.</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for p in top_valued_products %}
+                            <tr class="hover:bg-slate-50/80 transition">
+                                <td class="py-2.5 px-3 font-bold text-slate-800">
+                                    <div class="truncate max-w-[200px] sm:max-w-xs">{{ p.name }}</div>
+                                    <span class="text-[10px] text-slate-400 font-mono">{{ p.barcode|default:"-" }}</span>
+                                </td>
+                                <td class="py-2.5 px-3 text-center font-bold font-mono">
+                                    {{ p.stock }}
+                                </td>
+                                <td class="py-2.5 px-3 text-right font-mono text-slate-600">
+                                    ${{ p.price|intcomma }}
+                                </td>
+                                <td class="py-2.5 px-3 text-right font-black font-mono text-brand-600">
+                                    ${{ p.sale_valuation|intcomma }}
+                                </td>
+                                <td class="py-2.5 px-3 text-right font-mono text-slate-500 font-medium">
+                                    {{ p.valuation_share }}%
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="py-4 text-center text-slate-400">No hay productos con existencias disponibles</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Footer / Acciones Modal -->
+            <div class="mt-6 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <span class="text-xs text-slate-400 text-center sm:text-left">
+                    Valores calculados en tiempo real según existencias actuales.
+                </span>
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <a href="{% url 'inventory_valuation_pdf' %}" 
+                       target="_blank"
+                       class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-400 text-white font-bold rounded-xl text-xs transition active:scale-95 shadow-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <span>Descargar PDF Valorizado</span>
+                    </a>
+                    <button @click="valuationOpen = false" 
+                            class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+                        Cerrar
                     </button>
                 </div>
             </div>

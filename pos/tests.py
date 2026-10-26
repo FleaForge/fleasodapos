@@ -261,4 +261,33 @@ class PriceAndProfitabilityTests(TestCase):
         prod.refresh_from_db()
         self.assertEqual(prod.stock, 17) # 20 - 3
 
+    def test_inventory_valuation_and_pdf(self):
+        # Create test products
+        p1 = Product.objects.create(name='Arroz Diana 1kg', cost_price=3500, price=4500, stock=20) # sale: 90,000, cost: 70,000
+        p2 = Product.objects.create(name='Aceite Premier 1L', cost_price=7000, price=9000, stock=10) # sale: 90,000, cost: 70,000
+
+        # Check inventory view
+        res = self.client.get(reverse('inventory'))
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, 'Valor Inventario (PVP)')
+        self.assertContains(res, 'Valor Estimado Venta')
+        self.assertContains(res, 'Valor en Stock')
+        self.assertEqual(res.context['total_stock_units'], 30) # 20 + 10
+        self.assertEqual(res.context['total_sale_valuation'], 180000) # 90,000 + 90,000
+
+        # Check dashboard inventory valuation widget
+        res_dash = self.client.get(reverse('dashboard'))
+        self.assertEqual(res_dash.status_code, 200)
+        self.assertContains(res_dash, 'Patrimonio en Mercancía')
+        self.assertContains(res_dash, 'Valorización Inventario (PVP)')
+        self.assertEqual(res_dash.context['total_inventory_valuation'], 180000)
+
+        # Check inventory valuation PDF generation
+        res_pdf = self.client.get(reverse('inventory_valuation_pdf'))
+        self.assertEqual(res_pdf.status_code, 200)
+        self.assertEqual(res_pdf['Content-Type'], 'application/pdf')
+        self.assertIn('Valorizacion_Inventario.pdf', res_pdf['Content-Disposition'])
+        self.assertTrue(res_pdf.content.startswith(b'%PDF'))
+
+
 

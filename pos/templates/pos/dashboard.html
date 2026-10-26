@@ -122,6 +122,46 @@
         </div>
     </div>
 
+    <!-- Inventory Valuation Executive Strip -->
+    <div class="bg-gradient-to-r from-slate-900 via-brand-900 to-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-brand-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex items-center gap-3.5">
+            <div class="w-11 h-11 rounded-xl bg-white/10 backdrop-blur-xs flex items-center justify-center text-brand-300 shrink-0 border border-white/10">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                </svg>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-brand-300">Patrimonio en Mercancía</span>
+                    <span class="text-[10px] bg-brand-500/30 text-brand-200 border border-brand-400/30 px-2 py-0.5 rounded-full font-medium">Tiempo Real</span>
+                </div>
+                <div class="flex flex-wrap items-baseline gap-2 mt-0.5">
+                    <span class="text-xs text-slate-300">Valorización Inventario (PVP):</span>
+                    <span class="text-lg sm:text-2xl font-black font-mono text-emerald-400">${{ total_inventory_valuation|intcomma }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-between md:justify-end gap-3 sm:gap-6 pt-3 md:pt-0 border-t md:border-t-0 border-white/10">
+            <div class="text-left md:text-right">
+                <div class="text-[10px] sm:text-xs text-slate-300 font-medium">Existencias Totales</div>
+                <div class="text-sm sm:text-base font-extrabold text-white font-mono">{{ total_stock_units|intcomma }} <span class="text-xs text-slate-400 font-sans font-normal">unidades ({{ total_products }} refs)</span></div>
+            </div>
+            <div class="h-8 w-px bg-white/10 hidden sm:block"></div>
+            <div class="text-left md:text-right">
+                <div class="text-[10px] sm:text-xs text-slate-300 font-medium">Inversión (Costo)</div>
+                <div class="text-sm sm:text-base font-extrabold text-slate-200 font-mono">${{ total_inventory_cost|intcomma }}</div>
+            </div>
+            <a href="{% url 'inventory' %}"
+               class="inline-flex items-center gap-1.5 bg-brand-500 hover:bg-brand-400 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition shadow-sm shrink-0 active:scale-95">
+                <span>Ver Inventario</span>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </a>
+        </div>
+    </div>
+
     <!-- Analytics Charts Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
