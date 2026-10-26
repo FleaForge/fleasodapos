@@ -624,9 +624,11 @@ def annul_payment(request, payment_id):
 @login_required
 def pos(request):
     clients = Client.objects.all()
+    default_client = Client.get_default_client()
     cart_items, cart_total = get_cart_data(request.session)
     return render(request, 'pos/pos.html', {
         'clients': clients, 
+        'default_client': default_client,
         'cart_items': cart_items, 
         'cart_total': cart_total
     })
@@ -767,7 +769,12 @@ def add_to_cart(request):
         'itemAdded': {
             'name': product.name,
             'price': product.price,
-            'total': cart_total
+            'total': cart_total,
+            'count': len(cart_items)
+        },
+        'cartUpdated': {
+            'total': cart_total,
+            'count': len(cart_items)
         }
     })
     return response
@@ -801,25 +808,46 @@ def update_cart_item(request):
             
     request.session['cart'] = cart
     cart_items, cart_total = get_cart_data(request.session)
-    return render(request, 'pos/partials/cart_items.html', {'cart_items': cart_items, 'cart_total': cart_total})
+    response = render(request, 'pos/partials/cart_items.html', {'cart_items': cart_items, 'cart_total': cart_total})
+    import json
+    response['HX-Trigger'] = json.dumps({
+        'cartUpdated': {
+            'total': cart_total,
+            'count': len(cart_items)
+        }
+    })
+    return response
 
 @login_required
 def clear_cart(request):
     request.session['cart'] = {}
-    return render(request, 'pos/partials/cart_items.html', {'cart_items': [], 'cart_total': 0})
+    response = render(request, 'pos/partials/cart_items.html', {'cart_items': [], 'cart_total': 0})
+    import json
+    response['HX-Trigger'] = json.dumps({
+        'cartCleared': True,
+        'cartUpdated': {
+            'total': 0,
+            'count': 0
+        }
+    })
+    return response
 
 @login_required
 def checkout(request):
     if request.method == 'POST':
         client_id = request.POST.get('client_id')
-        payment_method = request.POST.get('payment_method')
+        payment_method = request.POST.get('payment_method') or 'CASH'
         cart = request.session.get('cart', {})
         
-        if not cart or not client_id:
-            messages.error(request, 'Carrito vacío o cliente no seleccionado')
+        if not cart:
+            messages.error(request, 'El carrito de ventas está vacío.')
             return redirect('pos')
             
-        client = get_object_or_404(Client, id=client_id)
+        if not client_id:
+            client = Client.get_default_client()
+            payment_method = 'CASH'
+        else:
+            client = get_object_or_404(Client, id=client_id)
         
         # Recalculate total just to be safe
         total = sum(item['price'] * item['quantity'] for item in cart.values())
@@ -988,11 +1016,13 @@ def add_client(request):
         except ValueError:
             initial_debt = 0
             
+        is_default = request.POST.get('is_default') in ('true', 'on', '1', 'True')
         client = Client.objects.create(
             name=name,
             phone=phone,
             email=email,
-            address=address
+            address=address,
+            is_default=is_default
         )
         
         # Handle Initial Debt / Historical Balance
@@ -1532,11 +1562,26 @@ def edit_product(request, product_id):
     price_history = product.price_history.select_related('user').order_by('-date')
     components = product.components.select_related('component_product').all()
     available_supplies = Product.objects.filter(is_active=True).exclude(id=product.id).order_by('name')
+    existing_component_ids = {c.component_product_id: c.quantity for c in components}
+    supplies_data = [
+        {
+            'id': s.id,
+            'name': s.name,
+            'barcode': s.barcode or '',
+            'stock': s.stock,
+            'cost_price': s.cost_price,
+            'price': s.price,
+            'is_service': s.is_service,
+            'in_recipe_qty': existing_component_ids.get(s.id, 0),
+        }
+        for s in available_supplies
+    ]
     return render(request, 'pos/edit_product.html', {
         'product': product,
         'price_history': price_history,
         'components': components,
         'available_supplies': available_supplies,
+        'supplies_data': supplies_data,
     })
 
 @login_required
@@ -1544,12 +1589,21 @@ def add_product_component(request, product_id):
     product = get_object_or_404(Product, id=product_id)
     if request.method == 'POST':
         component_id = request.POST.get('component_product_id')
+        barcode_search = request.POST.get('barcode_or_search', '').strip()
         quantity_str = request.POST.get('quantity', '1')
         try:
             quantity = max(1, int(quantity_str))
         except (ValueError, TypeError):
             quantity = 1
             
+        if not component_id and barcode_search:
+            # Fallback en caso de que se haya escaneado directamente un código de barras
+            comp_prod = Product.objects.filter(barcode=barcode_search).first()
+            if not comp_prod:
+                comp_prod = Product.objects.filter(name__iexact=barcode_search).first()
+            if comp_prod:
+                component_id = comp_prod.id
+
         if component_id:
             try:
                 component_product = Product.objects.get(id=component_id)
@@ -1571,7 +1625,9 @@ def add_product_component(request, product_id):
                     messages.success(request, f'Insumo "{component_product.name}" agregado a la receta correctamente. Su capacidad de venta en POS ahora se calcula según las existencias de este insumo.')
             except Product.DoesNotExist:
                 messages.error(request, 'El insumo seleccionado no existe.')
-    return redirect('edit_product', product_id=product.id)
+        else:
+            messages.error(request, 'Debes buscar y seleccionar un insumo del inventario para vincular a la receta.')
+    return redirect(f"{reverse('edit_product', args=[product.id])}#receta")
 
 @login_required
 def delete_product_component(request, component_id):
@@ -1581,7 +1637,7 @@ def delete_product_component(request, component_id):
         name = component.component_product.name
         component.delete()
         messages.success(request, f'Insumo "{name}" retirado de la receta.')
-    return redirect('edit_product', product_id=product_id)
+    return redirect(f"{reverse('edit_product', args=[product_id])}#receta")
 
 @login_required
 def product_price_history(request, product_id):
@@ -1685,10 +1741,19 @@ def edit_client(request, client_id):
         client.phone = request.POST.get('phone')
         client.email = request.POST.get('email')
         client.address = request.POST.get('address')
+        client.is_default = request.POST.get('is_default') in ('true', 'on', '1', 'True')
         client.save()
         messages.success(request, 'Cliente actualizado correctamente.')
         return redirect('clients')
     return render(request, 'pos/edit_client.html', {'client': client})
+
+@login_required
+def set_default_client(request, client_id):
+    client = get_object_or_404(Client, id=client_id)
+    client.is_default = True
+    client.save()
+    messages.success(request, f'"{client.name}" ha sido establecido como Consumidor Final (Cliente por defecto para ventas POS).')
+    return redirect('clients')
 
 @login_required
 def edit_sale(request, sale_id):

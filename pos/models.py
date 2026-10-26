@@ -285,10 +285,43 @@ class Client(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
+    is_default = models.BooleanField(default=False, help_text="Cliente por defecto / Consumidor Final para ventas rápidas en POS")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if self.is_default:
+            Client.objects.filter(is_default=True).exclude(id=self.id).update(is_default=False)
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_default_client(cls):
+        """
+        Retorna el cliente asignado para Consumidor Final / Ventas Rápidas en POS.
+        Busca por is_default=True, luego por 'CONTADO POS', luego por palabras clave 'CONTADO' / 'CONSUMIDOR FINAL'.
+        Si no existe ninguno, crea 'CONTADO POS' automáticamente.
+        """
+        client = cls.objects.filter(is_default=True).first()
+        if client:
+            return client
+        
+        client = cls.objects.filter(name__iexact='CONTADO POS').first()
+        if not client:
+            client = cls.objects.filter(name__icontains='CONTADO POS').first()
+        if not client:
+            client = cls.objects.filter(name__icontains='CONTADO').first()
+        if not client:
+            client = cls.objects.filter(name__icontains='CONSUMIDOR FINAL').first()
+        
+        if not client:
+            client = cls.objects.create(name='CONTADO POS', is_default=True)
+        else:
+            if not client.is_default:
+                client.is_default = True
+                client.save(update_fields=['is_default'])
+        return client
 
     @property
     def balance(self):

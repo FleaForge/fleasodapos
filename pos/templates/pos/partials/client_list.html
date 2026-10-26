@@ -3,18 +3,32 @@
 <div class="bg-white p-4 rounded-xl shadow-sm border border-brand-200">
     <div class="flex justify-between items-start mb-2">
         <div>
-            <h3 class="font-bold text-lg text-brand-500">{{ client.name }}</h3>
-            <p class="text-sm text-gray-500">{{ client.phone }}</p>
+            <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="font-bold text-lg text-brand-500">{{ client.name }}</h3>
+                {% if client.is_default %}
+                <span class="inline-flex items-center gap-1 text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
+                    ⚡ Consumidor Final POS
+                </span>
+                {% endif %}
+            </div>
+            <p class="text-sm text-gray-500">{{ client.phone|default:"Sin teléfono" }}</p>
         </div>
-        <div class="flex flex-col items-end gap-2">
+        <div class="flex flex-col items-end gap-1.5">
             <a href="{% url 'edit_client' client.id %}"
                 class="text-xs text-gray-400 hover:text-brand-500 flex items-center gap-1">
                 <span>✏️</span> Editar
             </a>
             <a href="{% url 'client_statement' client.id %}"
-                class="bg-brand-200 text-brand-500 text-xs px-2 py-1 rounded hover:bg-brand-300">
+                class="bg-brand-200 text-brand-500 text-xs px-2 py-1 rounded hover:bg-brand-300 font-bold">
                 Estado de Cuenta
             </a>
+            {% if not client.is_default %}
+            <a href="{% url 'set_default_client' client.id %}"
+               onclick="return confirm('¿Deseas marcar a {{ client.name }} como el Consumidor Final por defecto para ventas rápidas en el POS?');"
+               class="text-[10px] font-bold text-slate-400 hover:text-brand-600 transition flex items-center gap-1 mt-0.5">
+                ⚡ Fijar como Consumidor Final
+            </a>
+            {% endif %}
         </div>
     </div>
 

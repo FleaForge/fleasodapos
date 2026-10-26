@@ -13,6 +13,7 @@ urlpatterns = [
     path('clients/<int:client_id>/statement/pdf/', views.client_statement_pdf, name='client_statement_pdf'),
     path('clients/<int:client_id>/payment/add/', views.add_payment, name='add_payment'),
     path('clients/<int:client_id>/adjust-balance/', views.adjust_client_balance, name='adjust_client_balance'),
+    path('clients/<int:client_id>/set-default/', views.set_default_client, name='set_default_client'),
     path('pos/', views.pos, name='pos'),
     
     # HTMX Partials

@@ -39,6 +39,13 @@
                             <p class="text-xs text-gray-400 mt-1">Si el cliente ya debe dinero de antes, ingrésalo aquí.
                             </p>
                         </div>
+                        <div class="pt-2 border-t border-gray-100 flex items-start gap-2.5 bg-brand-50/50 p-2.5 rounded-lg border border-brand-100">
+                            <input type="checkbox" id="is_default_new" name="is_default" class="mt-0.5 w-4 h-4 text-brand-500 rounded border-gray-300 focus:ring-brand-500">
+                            <label for="is_default_new" class="text-xs text-gray-700 font-bold select-none cursor-pointer">
+                                ⚡ Marcar como Consumidor Final (Ventas Rápidas POS)
+                                <span class="block text-[11px] font-normal text-gray-500 mt-0.5">Las ventas del POS sin cliente seleccionado se asignarán automáticamente a este cliente.</span>
+                            </label>
+                        </div>
                     </div>
                     <div class="mt-6 flex justify-end gap-2">
                         <button type="button" @click="open = false"

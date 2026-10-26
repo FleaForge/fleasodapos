@@ -640,7 +640,7 @@
     </div>
 
     <!-- SECCIÓN: INSUMOS Y RECETA DE CONSUMO (ESCANDALLO) -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div id="receta" class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <!-- Header -->
         <div class="p-5 sm:p-6 border-b border-slate-100 bg-gradient-to-r from-indigo-50/70 via-slate-50 to-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div class="flex items-center gap-3">
@@ -770,39 +770,195 @@
             </div>
             {% endif %}
 
-            <!-- Formulario para Vincular Insumo -->
-            <div class="pt-4 border-t border-slate-200">
-                <h4 class="text-xs font-black uppercase tracking-wider text-slate-700 mb-2.5 flex items-center gap-1.5">
-                    <span>➕ Vincular Insumo a la Receta</span>
-                </h4>
+            <!-- Formulario para Vincular Insumo (Buscador Inteligente) -->
+            <div class="pt-4 border-t border-slate-200" x-data="supplyPicker()">
+                
+                {{ supplies_data|json_script:"supplies-json" }}
+
+                <div class="flex items-center justify-between mb-2.5 flex-wrap gap-2">
+                    <h4 class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <span>➕ Vincular Insumo a la Receta</span>
+                    </h4>
+                    <span class="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                        <span x-text="items.length"></span> insumos disponibles
+                    </span>
+                </div>
+
                 <form action="{% url 'add_product_component' product.id %}" method="post" 
-                      class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end bg-slate-50 p-4 rounded-xl border border-slate-200">
+                      @submit="handleSubmit($event)"
+                      class="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-3">
                     {% csrf_token %}
-                    
-                    <div class="sm:col-span-7 space-y-1">
-                        <label class="block text-xs font-bold text-slate-600">Seleccionar Insumo del Inventario:</label>
-                        <select name="component_product_id" required 
-                                class="w-full text-xs font-bold text-slate-800 px-3 py-2.5 rounded-xl border border-slate-300 bg-white outline-none focus:border-brand-500 shadow-2xs">
-                            <option value="">-- Elige un artículo / insumo --</option>
-                            {% for supply in available_supplies %}
-                            <option value="{{ supply.id }}">
-                                {{ supply.name }} (Stock: {{ supply.stock }} | Costo: ${{ supply.cost_price|intcomma }})
-                            </option>
-                            {% endfor %}
-                        </select>
+                    <input type="hidden" name="component_product_id" :value="selectedSupply ? selectedSupply.id : ''">
+                    <input type="hidden" name="barcode_or_search" :value="searchQuery">
+
+                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                        
+                        <!-- Buscador Inteligente con Autocompletado / Dropdown -->
+                        <div class="sm:col-span-7 space-y-1 relative">
+                            <div class="flex items-center justify-between">
+                                <label class="block text-xs font-bold text-slate-700">
+                                    Seleccionar Insumo del Inventario:
+                                </label>
+                                <span class="text-[10px] text-indigo-600 font-bold flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                    Nombre o código de barras
+                                </span>
+                            </div>
+
+                            <!-- Estado 1: Buscador Activo (No hay insumo seleccionado) -->
+                            <div x-show="!selectedSupply" class="relative">
+                                <div class="relative flex items-center">
+                                    <span class="absolute left-3 text-slate-400 pointer-events-none">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                        </svg>
+                                    </span>
+                                    <input type="text"
+                                           x-ref="searchInput"
+                                           x-model="searchQuery"
+                                           @focus="openDropdown()"
+                                           @click="openDropdown()"
+                                           @input="onSearchInput()"
+                                           @keydown.arrow-down.prevent="navigate(1)"
+                                           @keydown.arrow-up.prevent="navigate(-1)"
+                                           @keydown.enter.prevent="selectHighlightedOrFirst()"
+                                           @keydown.escape="closeDropdown()"
+                                           placeholder="Escribe nombre o escanea código (ej: opalina, 770...)"
+                                           autocomplete="off"
+                                           class="w-full text-xs font-semibold text-slate-800 pl-9 pr-8 py-2.5 rounded-xl border border-slate-300 bg-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 shadow-2xs transition-all">
+                                    
+                                    <button type="button" 
+                                            x-show="searchQuery" 
+                                            @click="searchQuery = ''; openDropdown(); $refs.searchInput.focus()"
+                                            class="absolute right-2.5 p-1 text-slate-400 hover:text-slate-600 rounded-md">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+
+                                <!-- Dropdown flotante con resultados -->
+                                <div x-show="isOpen" 
+                                     x-transition:enter="transition ease-out duration-100"
+                                     x-transition:enter-start="opacity-0 scale-95"
+                                     x-transition:enter-end="opacity-100 scale-100"
+                                     x-transition:leave="transition ease-in duration-75"
+                                     x-transition:leave-start="opacity-100 scale-100"
+                                     x-transition:leave-end="opacity-0 scale-95"
+                                     @click.outside="closeDropdown()"
+                                     class="absolute z-50 left-0 right-0 mt-1 max-h-72 overflow-y-auto rounded-xl bg-white shadow-2xl border border-slate-200 divide-y divide-slate-100 text-left">
+                                     
+                                    <div class="px-3 py-1.5 bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-500 flex justify-between items-center sticky top-0 z-10 backdrop-blur-xs">
+                                        <span x-text="searchQuery ? ('Encontrados: ' + filteredItems.length) : ('Primeros ' + filteredItems.length + ' de ' + items.length + ' insumos')"></span>
+                                        <span class="text-[10px] text-slate-400">↑↓ navegar · Enter elegir</span>
+                                    </div>
+
+                                    <template x-for="(item, idx) in filteredItems" :key="item.id">
+                                        <div @click="selectSupply(item)"
+                                             @mouseenter="highlightedIndex = idx"
+                                             :class="highlightedIndex === idx ? 'bg-indigo-50/80 text-indigo-900 border-l-4 border-indigo-600' : 'hover:bg-slate-50 text-slate-700'"
+                                             class="p-2.5 sm:p-3 cursor-pointer transition-colors border-l-4 border-transparent flex flex-col gap-1">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <span class="font-bold text-xs" x-text="item.name"></span>
+                                                <template x-if="item.barcode">
+                                                    <span class="shrink-0 text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
+                                                        🏷️ <span x-text="item.barcode"></span>
+                                                    </span>
+                                                </template>
+                                            </div>
+                                            <div class="flex items-center gap-2.5 text-[11px] flex-wrap">
+                                                <span :class="item.stock <= 0 ? 'text-rose-600 font-bold' : (item.stock <= 5 ? 'text-amber-600 font-bold' : 'text-emerald-700 font-bold')"
+                                                      class="flex items-center gap-1">
+                                                    📦 Stock: <span x-text="item.stock"></span> disp.
+                                                </span>
+                                                <span class="text-slate-300">|</span>
+                                                <span class="text-slate-500 font-mono">
+                                                    Costo: <strong>$<span x-text="item.cost_price.toLocaleString('es-CO')"></span></strong>
+                                                </span>
+                                                <template x-if="item.in_recipe_qty > 0">
+                                                    <span class="text-[10px] bg-indigo-100 text-indigo-700 font-bold px-1.5 py-0.2 rounded border border-indigo-200">
+                                                        Ya en receta (<span x-text="item.in_recipe_qty"></span>)
+                                                    </span>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <!-- Sin Resultados -->
+                                    <div x-show="filteredItems.length === 0" class="p-6 text-center text-xs text-slate-500">
+                                        <div class="text-xl mb-1">🔍</div>
+                                        <p class="font-bold text-slate-700">No encontramos ningún insumo con "<span x-text="searchQuery"></span>"</p>
+                                        <p class="text-[11px] text-slate-400 mt-0.5">Verifica si el nombre o código de barras está bien escrito.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Estado 2: Insumo Seleccionado -->
+                            <div x-show="selectedSupply" 
+                                 x-transition
+                                 class="p-2.5 sm:p-3 bg-gradient-to-r from-indigo-50/90 to-purple-50/70 rounded-xl border border-indigo-200 flex items-center justify-between gap-3 shadow-2xs">
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white text-xs font-bold">✓</span>
+                                        <h5 class="text-xs sm:text-sm font-black text-indigo-950 truncate" x-text="selectedSupply ? selectedSupply.name : ''"></h5>
+                                    </div>
+                                    <div class="flex items-center gap-2 mt-1 text-[11px] text-indigo-800 flex-wrap">
+                                        <template x-if="selectedSupply && selectedSupply.barcode">
+                                            <span class="font-mono bg-white/90 px-1.5 py-0.5 rounded border border-indigo-200 text-[10px] font-bold text-slate-700">
+                                                🏷️ <span x-text="selectedSupply.barcode"></span>
+                                            </span>
+                                        </template>
+                                        <span class="font-bold" :class="selectedSupply && selectedSupply.stock <= 0 ? 'text-rose-600' : 'text-emerald-700'">
+                                            📦 Stock actual: <span x-text="selectedSupply ? selectedSupply.stock : 0"></span> disp.
+                                        </span>
+                                        <span class="text-indigo-300">·</span>
+                                        <span class="font-mono font-bold text-slate-700">
+                                            Costo: $<span x-text="selectedSupply ? selectedSupply.cost_price.toLocaleString('es-CO') : 0"></span>
+                                        </span>
+                                    </div>
+                                </div>
+                                <button type="button" 
+                                        @click="clearSelection()"
+                                        class="shrink-0 px-2.5 py-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-white hover:bg-indigo-50 rounded-lg border border-indigo-200 transition shadow-2xs active:scale-95 flex items-center gap-1">
+                                    <span>Cambiar</span>
+                                    <span class="text-indigo-400">✕</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Cantidad a restar -->
+                        <div class="sm:col-span-2 space-y-1">
+                            <label class="block text-xs font-bold text-slate-700">Cant. a restar:</label>
+                            <input type="number" 
+                                   name="quantity" 
+                                   x-ref="qtyInput"
+                                   value="1" 
+                                   min="1" 
+                                   step="1" 
+                                   required
+                                   class="w-full text-xs font-bold text-slate-800 px-3 py-2.5 rounded-xl border border-slate-300 bg-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 shadow-2xs text-center font-mono">
+                        </div>
+
+                        <!-- Botón Vincular -->
+                        <div class="sm:col-span-3">
+                            <button type="submit" 
+                                    :disabled="!selectedSupply"
+                                    :class="!selectedSupply ? 'opacity-50 cursor-not-allowed bg-slate-400' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-indigo-200'"
+                                    class="w-full py-2.5 px-4 text-white font-bold rounded-xl text-xs transition shadow-md flex items-center justify-center gap-1.5">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                </svg>
+                                <span>+ Vincular Insumo</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <div class="sm:col-span-2 space-y-1">
-                        <label class="block text-xs font-bold text-slate-600">Cant. a restar:</label>
-                        <input type="number" name="quantity" value="1" min="1" step="1" required
-                               class="w-full text-xs font-bold text-slate-800 px-3 py-2.5 rounded-xl border border-slate-300 bg-white outline-none focus:border-brand-500 shadow-2xs text-center font-mono">
-                    </div>
-
-                    <div class="sm:col-span-3">
-                        <button type="submit" 
-                                class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition shadow-2xs flex items-center justify-center gap-1.5 active:scale-95">
-                            <span>+ Vincular Insumo</span>
-                        </button>
+                    <!-- Mensaje de error/validación interactivo -->
+                    <div x-show="errorMessage" 
+                         x-transition
+                         class="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-3 py-2 rounded-xl flex items-center gap-1.5">
+                        <span>⚠️</span>
+                        <span x-text="errorMessage"></span>
                     </div>
                 </form>
             </div>
@@ -1068,6 +1224,138 @@ function productEditor(initialCost, initialPrice, initialStock, initialComponent
                 badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
                 iconBg: 'bg-purple-500'
             };
+        }
+    };
+}
+
+// Selector inteligente y rápido de insumos con búsqueda por nombre y código de barras
+function supplyPicker() {
+    return {
+        items: [],
+        searchQuery: '',
+        isOpen: false,
+        selectedSupply: null,
+        highlightedIndex: 0,
+        errorMessage: '',
+
+        init() {
+            const el = document.getElementById('supplies-json');
+            if (el) {
+                try {
+                    this.items = JSON.parse(el.textContent) || [];
+                } catch (e) {
+                    console.error("Error al cargar lista de insumos:", e);
+                }
+            }
+        },
+
+        normalizeText(str) {
+            return (str || '')
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .trim();
+        },
+
+        get filteredItems() {
+            if (!this.searchQuery || !this.searchQuery.trim()) {
+                return this.items.slice(0, 30);
+            }
+
+            const qRaw = this.searchQuery.trim().toLowerCase();
+            const qNorm = this.normalizeText(this.searchQuery);
+            const tokens = qNorm.split(/\s+/).filter(Boolean);
+
+            // Priorizar coincidencia exacta de código de barras
+            const exactBarcode = this.items.find(i => (i.barcode || '').toLowerCase() === qRaw);
+            if (exactBarcode) {
+                const rest = this.items.filter(i => i.id !== exactBarcode.id && this.matchesQuery(i, tokens, qRaw)).slice(0, 29);
+                return [exactBarcode, ...rest];
+            }
+
+            return this.items.filter(i => this.matchesQuery(i, tokens, qRaw)).slice(0, 35);
+        },
+
+        matchesQuery(item, tokens, qRaw) {
+            const nameNorm = this.normalizeText(item.name);
+            const barcode = (item.barcode || '').toLowerCase();
+            
+            if (barcode && barcode.includes(qRaw)) return true;
+
+            return tokens.every(token => nameNorm.includes(token) || barcode.includes(token));
+        },
+
+        openDropdown() {
+            this.isOpen = true;
+            this.highlightedIndex = 0;
+            this.errorMessage = '';
+        },
+
+        closeDropdown() {
+            this.isOpen = false;
+        },
+
+        onSearchInput() {
+            this.isOpen = true;
+            this.highlightedIndex = 0;
+            this.errorMessage = '';
+
+            const qRaw = this.searchQuery.trim().toLowerCase();
+            if (qRaw.length >= 4) {
+                const exact = this.items.find(i => (i.barcode || '').toLowerCase() === qRaw);
+                if (exact) {
+                    this.selectSupply(exact);
+                }
+            }
+        },
+
+        navigate(direction) {
+            if (!this.isOpen) {
+                this.openDropdown();
+                return;
+            }
+            const count = this.filteredItems.length;
+            if (count === 0) return;
+            this.highlightedIndex = (this.highlightedIndex + direction + count) % count;
+        },
+
+        selectHighlightedOrFirst() {
+            const items = this.filteredItems;
+            if (items.length > 0) {
+                const idx = (this.highlightedIndex >= 0 && this.highlightedIndex < items.length) ? this.highlightedIndex : 0;
+                this.selectSupply(items[idx]);
+            }
+        },
+
+        selectSupply(item) {
+            this.selectedSupply = item;
+            this.isOpen = false;
+            this.searchQuery = '';
+            this.errorMessage = '';
+            this.$nextTick(() => {
+                this.$refs.qtyInput?.focus();
+                this.$refs.qtyInput?.select();
+            });
+        },
+
+        clearSelection() {
+            this.selectedSupply = null;
+            this.searchQuery = '';
+            this.isOpen = true;
+            this.highlightedIndex = 0;
+            this.errorMessage = '';
+            this.$nextTick(() => {
+                this.$refs.searchInput?.focus();
+            });
+        },
+
+        handleSubmit(event) {
+            if (!this.selectedSupply) {
+                event.preventDefault();
+                this.errorMessage = 'Por favor busca y selecciona un insumo de la lista antes de vincular.';
+                this.openDropdown();
+                this.$refs.searchInput?.focus();
+            }
         }
     };
 }

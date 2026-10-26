@@ -367,23 +367,41 @@ class PriceAndProfitabilityTests(TestCase):
         self.assertEqual(paper.stock, 20) # Restored back to 20
 
     def test_add_and_delete_product_component_views(self):
-        paper = Product.objects.create(name='Papel Bond Carta', cost_price=50, price=100, stock=100)
+        paper = Product.objects.create(name='Papel Bond Carta', barcode='7701112223334', cost_price=50, price=100, stock=100)
         service = Product.objects.create(name='Fotocopia B/N', cost_price=0, price=200, stock=0, is_service=True)
 
-        # Add component via view
-        res_add = self.client.post(reverse('add_product_component', args=[service.id]), {
-            'component_product_id': paper.id,
-            'quantity': 1
-        }, follow=True)
-        self.assertEqual(res_add.status_code, 200)
+        # Check edit_product view supplies_data context
+        res_edit = self.client.get(reverse('edit_product', args=[service.id]))
+        self.assertEqual(res_edit.status_code, 200)
+        self.assertIn('supplies_data', res_edit.context)
+        supplies_list = res_edit.context['supplies_data']
+        self.assertTrue(any(s['id'] == paper.id and s['barcode'] == '7701112223334' for s in supplies_list))
+
+        # Add component via barcode_or_search fallback
+        res_add_barcode = self.client.post(reverse('add_product_component', args=[service.id]), {
+            'barcode_or_search': '7701112223334',
+            'quantity': 2
+        })
+        self.assertEqual(res_add_barcode.status_code, 302)
+        self.assertTrue(res_add_barcode.url.endswith('#receta'))
 
         comp = ProductComponent.objects.filter(parent_product=service, component_product=paper).first()
         self.assertIsNotNone(comp)
-        self.assertEqual(comp.quantity, 1)
+        self.assertEqual(comp.quantity, 2)
+
+        # Add more component via component_product_id
+        res_add = self.client.post(reverse('add_product_component', args=[service.id]), {
+            'component_product_id': paper.id,
+            'quantity': 1
+        })
+        self.assertEqual(res_add.status_code, 302)
+        comp.refresh_from_db()
+        self.assertEqual(comp.quantity, 3)
 
         # Delete component via view
-        res_del = self.client.post(reverse('delete_product_component', args=[comp.id]), follow=True)
-        self.assertEqual(res_del.status_code, 200)
+        res_del = self.client.post(reverse('delete_product_component', args=[comp.id]))
+        self.assertEqual(res_del.status_code, 302)
+        self.assertTrue(res_del.url.endswith('#receta'))
         self.assertFalse(ProductComponent.objects.filter(id=comp.id).exists())
 
     def test_add_product_duplicate_barcode_handled_gracefully(self):
@@ -656,6 +674,73 @@ class ServicesAndInventoryValuationTests(TestCase):
         # El stock del insumo debe seguir intacto en 2 (no en -1)
         papel.refresh_from_db()
         self.assertEqual(papel.stock, 2)
+
+
+class FinalConsumerAndFastCheckoutTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='pos_cashier', password='password123')
+        self.client.login(username='pos_cashier', password='password123')
+
+    def test_default_client_auto_detection_and_creation(self):
+        # Cuando existe CONTADO POS, get_default_client lo detecta
+        client_contado = Client.objects.create(name='CONTADO POS')
+        default_client = Client.get_default_client()
+        self.assertEqual(default_client.id, client_contado.id)
+        self.assertTrue(default_client.is_default)
+
+    def test_pos_view_includes_default_client(self):
+        Client.objects.create(name='CONTADO POS', is_default=True)
+        res = self.client.get(reverse('pos'))
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('default_client', res.context)
+        self.assertEqual(res.context['default_client'].name, 'CONTADO POS')
+
+    def test_fast_checkout_without_selecting_client_defaults_to_contado_pos(self):
+        contado_pos = Client.objects.create(name='CONTADO POS', is_default=True)
+        prod = Product.objects.create(name='1L COCACOLA', cost_price=2000, price=4000, stock=10)
+
+        # Carrito con producto
+        session = self.client.session
+        session['cart'] = {
+            str(prod.id): {
+                'id': prod.id,
+                'name': prod.name,
+                'price': prod.price,
+                'quantity': 1
+            }
+        }
+        session.save()
+
+        # Checkout sin enviar client_id (flujo rápido de mostrador)
+        res = self.client.post(reverse('checkout'), {
+            'client_id': '',  # Vacío
+            'payment_method': ''
+        }, follow=True)
+
+        self.assertEqual(res.status_code, 200)
+        sale = Sale.objects.order_by('-id').first()
+        self.assertIsNotNone(sale)
+        self.assertEqual(sale.client.id, contado_pos.id)
+        self.assertEqual(sale.payment_method, 'CASH')
+        self.assertTrue(sale.is_paid)
+        self.assertEqual(sale.total, 4000)
+
+        # Stock descontado
+        prod.refresh_from_db()
+        self.assertEqual(prod.stock, 9)
+
+    def test_set_default_client_view(self):
+        c1 = Client.objects.create(name='CONTADO POS', is_default=True)
+        c2 = Client.objects.create(name='CONSUMIDOR FINAL CAJA 2', is_default=False)
+
+        res = self.client.get(reverse('set_default_client', args=[c2.id]), follow=True)
+        self.assertEqual(res.status_code, 200)
+
+        c1.refresh_from_db()
+        c2.refresh_from_db()
+        self.assertFalse(c1.is_default)
+        self.assertTrue(c2.is_default)
+        self.assertEqual(Client.get_default_client().id, c2.id)
 
 
 

@@ -110,6 +110,21 @@
                         class="w-full bg-slate-50 hover:bg-white focus:bg-white text-slate-800 font-medium p-3.5 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 transition outline-none text-sm sm:text-base shadow-2xs"
                     >{{ client.address }}</textarea>
                 </div>
+            <!-- Consumidor Final / Cliente por Defecto POS -->
+            <div class="p-4 bg-brand-50/60 rounded-xl border border-brand-200 flex items-start gap-3">
+                <input 
+                    type="checkbox" 
+                    id="is_default" 
+                    name="is_default" 
+                    {% if client.is_default %}checked{% endif %}
+                    class="mt-1 w-5 h-5 text-brand-500 rounded border-slate-300 focus:ring-brand-500 cursor-pointer"
+                />
+                <label for="is_default" class="text-xs sm:text-sm text-slate-800 font-bold cursor-pointer select-none">
+                    ⚡ Consumidor Final (Cliente por defecto para ventas en POS)
+                    <span class="block text-xs font-normal text-slate-500 mt-1">
+                        Si activas esta opción, todas las ventas en el POS donde no selecciones un cliente específico se facturarán automáticamente a <strong>{{ client.name }}</strong> de forma rápida a Contado.
+                    </span>
+                </label>
             </div>
 
             <!-- Action Buttons -->
