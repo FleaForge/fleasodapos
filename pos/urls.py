@@ -45,6 +45,7 @@ urlpatterns = [
     path('inventory/add-stock/<int:product_id>/', views.add_stock, name='add_stock'),
     path('inventory/product/<int:product_id>/price-history/', views.product_price_history, name='product_price_history'),
     path('inventory/price-history/', views.global_price_history, name='global_price_history'),
+    path('inventory/check-barcode/', views.check_barcode, name='check_barcode'),
     path('inventory/product/<int:product_id>/components/add/', views.add_product_component, name='add_product_component'),
     path('inventory/component/<int:component_id>/delete/', views.delete_product_component, name='delete_product_component'),
     path('clients/edit/<int:client_id>/', views.edit_client, name='edit_client'),

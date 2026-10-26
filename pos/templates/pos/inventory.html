@@ -329,8 +329,13 @@
                             <span class="inline-flex items-center px-2.5 bg-slate-50 text-slate-400 border-r border-slate-200 select-none font-mono text-xs">
                                 📟
                             </span>
-                            <input type="text" id="new-product-barcode" name="barcode" class="w-full px-2.5 py-2 text-slate-800 font-mono text-xs sm:text-sm outline-none bg-transparent" placeholder="Escanear o escribir...">
+                            <input type="text" id="new-product-barcode" name="barcode" 
+                                   hx-get="{% url 'check_barcode' %}"
+                                   hx-trigger="input changed delay:300ms, change"
+                                   hx-target="#new-barcode-feedback"
+                                   class="w-full px-2.5 py-2 text-slate-800 font-mono text-xs sm:text-sm outline-none bg-transparent" placeholder="Escanear o escribir...">
                         </div>
+                        <div id="new-barcode-feedback"></div>
                     </div>
 
                     <!-- Stock Inicial -->

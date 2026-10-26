@@ -386,6 +386,57 @@ class PriceAndProfitabilityTests(TestCase):
         self.assertEqual(res_del.status_code, 200)
         self.assertFalse(ProductComponent.objects.filter(id=comp.id).exists())
 
+    def test_add_product_duplicate_barcode_handled_gracefully(self):
+        # Existing product
+        Product.objects.create(name='Pincel Marfil #2', barcode='7706616498417', cost_price=1000, price=2000, stock=5)
+
+        # Attempt to add another product with the exact same barcode
+        response = self.client.post(reverse('add_product'), {
+            'name': 'PINCEL REDONDO CERDA NARANJA #4 MARFIL',
+            'barcode': '7706616498417',
+            'cost_price': '0',
+            'price': '0',
+            'stock': '0',
+        }, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'ya está asignado')
+        # Ensure second product was NOT created
+        self.assertEqual(Product.objects.filter(barcode='7706616498417').count(), 1)
+
+    def test_edit_product_duplicate_barcode_handled_gracefully(self):
+        p1 = Product.objects.create(name='Producto A', barcode='CODE111', cost_price=100, price=200, stock=10)
+        p2 = Product.objects.create(name='Producto B', barcode='CODE222', cost_price=100, price=200, stock=10)
+
+        # Attempt to assign p1's barcode to p2
+        response = self.client.post(reverse('edit_product', args=[p2.id]), {
+            'name': 'Producto B Modificado',
+            'barcode': 'CODE111',
+            'cost_price': '100',
+            'price': '200',
+            'stock': '10',
+        }, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'No se pudo asignar el código de barras')
+
+        p2.refresh_from_db()
+        self.assertEqual(p2.barcode, 'CODE222') # Barcode was not overwritten
+
+    def test_check_barcode_endpoint(self):
+        Product.objects.create(name='Cuaderno Norma', barcode='770999888', cost_price=3000, price=5000, stock=12)
+
+        # Checking existing barcode
+        res_exists = self.client.get(reverse('check_barcode'), {'barcode': '770999888'})
+        self.assertEqual(res_exists.status_code, 200)
+        self.assertContains(res_exists, 'Ya asignado a:')
+        self.assertContains(res_exists, 'Cuaderno Norma')
+
+        # Checking new unused barcode
+        res_new = self.client.get(reverse('check_barcode'), {'barcode': '1234567890123'})
+        self.assertEqual(res_new.status_code, 200)
+        self.assertContains(res_new, 'Código de barras disponible')
+
 
 
 

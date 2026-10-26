@@ -155,6 +155,9 @@
                         name="barcode" 
                         value="{{ product.barcode|default:'' }}"
                         placeholder="Ej: 770123456789 (o escanea con la cámara)"
+                        hx-get="{% url 'check_barcode' %}?product_id={{ product.id }}"
+                        hx-trigger="input changed delay:300ms, change"
+                        hx-target="#edit-barcode-feedback"
                         class="w-full px-3.5 py-3 text-slate-800 font-mono text-sm sm:text-base outline-none bg-transparent"
                     />
                     <button type="button" 
@@ -166,6 +169,7 @@
                         </svg>
                     </button>
                 </div>
+                <div id="edit-barcode-feedback"></div>
             </div>
 
             <!-- SECCIÓN INTERACTIVA: PRECIOS Y CALCULADORA DE RENTABILIDAD -->

@@ -118,11 +118,19 @@
     <!-- Main Content -->
     <main class="md:ml-64 p-4 min-h-screen">
         {% if messages %}
-        <div class="fixed top-4 right-4 z-50 space-y-2">
+        <div class="fixed top-4 right-4 z-50 space-y-2 max-w-sm sm:max-w-md w-full px-3 sm:px-0 pointer-events-none">
             {% for message in messages %}
-            <div class="bg-brand-400 text-white px-4 py-2 rounded-lg shadow-lg" x-data="{show: true}" x-show="show"
-                x-init="setTimeout(() => show = false, 3000)">
-                {{ message }}
+            <div class="pointer-events-auto {% if message.tags == 'error' %}bg-rose-600 text-white border-rose-700 shadow-rose-900/20{% elif message.tags == 'warning' %}bg-amber-600 text-white border-amber-700 shadow-amber-900/20{% elif message.tags == 'info' %}bg-sky-600 text-white border-sky-700 shadow-sky-900/20{% else %}bg-brand-500 text-white border-brand-600 shadow-brand-900/20{% endif %} px-4 py-3 rounded-2xl shadow-xl flex items-start gap-2.5 text-xs sm:text-sm font-bold border backdrop-blur-xs transition-all" 
+                 x-data="{show: true}" x-show="show"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 x-init="setTimeout(() => show = false, {% if message.tags == 'error' %}8000{% else %}4000{% endif %})">
+                <span class="text-base shrink-0 leading-none mt-0.5">{% if message.tags == 'error' %}⚠️{% elif message.tags == 'warning' %}⚡{% else %}✓{% endif %}</span>
+                <span class="flex-1 leading-snug">{{ message }}</span>
+                <button type="button" @click="show = false" class="text-white/80 hover:text-white shrink-0 -mr-1 -mt-0.5 p-1 rounded-lg hover:bg-black/10 transition">
+                    ✕
+                </button>
             </div>
             {% endfor %}
         </div>

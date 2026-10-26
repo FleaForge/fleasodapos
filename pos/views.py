@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from django.db import IntegrityError
 from django.db.models import Sum, Q, F, Count
 from django.utils import timezone
 from django.contrib import messages
@@ -785,11 +786,53 @@ def checkout(request):
     return redirect('pos')
 
 @login_required
+def check_barcode(request):
+    barcode = request.GET.get('barcode', '').strip()
+    product_id = request.GET.get('product_id')
+    
+    if not barcode:
+        return HttpResponse("")
+        
+    qs = Product.objects.filter(barcode=barcode)
+    if product_id:
+        try:
+            qs = qs.exclude(id=int(product_id))
+        except (ValueError, TypeError):
+            pass
+            
+    existing = qs.first()
+    if existing:
+        return HttpResponse(
+            f'<div class="mt-1.5 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 shadow-2xs animate-pulse">'
+            f'  <div class="flex items-center gap-1.5">'
+            f'    <span class="text-rose-500 text-sm">⚠️</span>'
+            f'    <span>Ya asignado a: <strong>{existing.name}</strong> (Stock: {existing.stock})</span>'
+            f'  </div>'
+            f'  <a href="/inventory/edit/{existing.id}/" class="inline-flex items-center gap-1 text-[11px] font-black text-rose-800 hover:text-rose-950 underline self-start sm:self-auto">Ver / Editar producto ➔</a>'
+            f'</div>'
+        )
+    return HttpResponse(
+        '<div class="mt-1.5 text-[11px] font-bold text-emerald-600 flex items-center gap-1">'
+        '  <span>✓ Código de barras disponible</span>'
+        '</div>'
+    )
+
+@login_required
 def add_product(request):
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
         barcode = request.POST.get('barcode', '').strip() or None
         is_service = request.POST.get('is_service') in ('true', 'on', '1')
+        
+        # Validar si ya existe un producto con este código de barras
+        if barcode:
+            existing = Product.objects.filter(barcode=barcode).first()
+            if existing:
+                messages.error(
+                    request, 
+                    f'No se pudo registrar "{name}": El código de barras "{barcode}" ya está asignado a "{existing.name}" (ID #{existing.id}, Stock actual: {existing.stock}). No se permiten códigos duplicados.'
+                )
+                return redirect('inventory')
         
         try:
             cost_price = int(float(request.POST.get('cost_price') or 0))
@@ -808,15 +851,22 @@ def add_product(request):
             
         image = request.FILES.get('image')
 
-        product = Product.objects.create(
-            name=name,
-            barcode=barcode,
-            cost_price=cost_price,
-            price=price,
-            stock=stock,
-            is_service=is_service,
-            image=image
-        )
+        try:
+            product = Product.objects.create(
+                name=name,
+                barcode=barcode,
+                cost_price=cost_price,
+                price=price,
+                stock=stock,
+                is_service=is_service,
+                image=image
+            )
+        except IntegrityError:
+            messages.error(
+                request, 
+                f'Error de integridad: El código de barras "{barcode}" ya existe en el sistema.'
+            )
+            return redirect('inventory')
         
         # Registrar en Historial de Precios
         ProductPriceHistory.objects.create(
@@ -1289,7 +1339,19 @@ def edit_product(request, product_id):
         
         product.name = request.POST.get('name', '').strip()
         barcode_val = request.POST.get('barcode', '').strip()
-        product.barcode = barcode_val if barcode_val else None
+        new_barcode = barcode_val if barcode_val else None
+        
+        # Validar si el nuevo código de barras ya pertenece a otro producto
+        if new_barcode:
+            duplicate = Product.objects.filter(barcode=new_barcode).exclude(id=product.id).first()
+            if duplicate:
+                messages.error(
+                    request,
+                    f'No se pudo asignar el código de barras "{new_barcode}": ya está asignado al producto "{duplicate.name}" (ID #{duplicate.id}). No se permiten códigos duplicados.'
+                )
+                return redirect('edit_product', product_id=product.id)
+                
+        product.barcode = new_barcode
         
         try:
             new_cost_price = int(float(request.POST.get('cost_price') or 0))
@@ -1327,7 +1389,11 @@ def edit_product(request, product_id):
             product.image = None
 
         product.is_service = request.POST.get('is_service') in ('true', 'on', '1')
-        product.save()
+        try:
+            product.save()
+        except IntegrityError:
+            messages.error(request, f'Error de integridad: El código de barras "{new_barcode}" ya existe en otro producto.')
+            return redirect('edit_product', product_id=product.id)
         
         # Detectar si hubo cambio de precio o costo
         if old_price != new_price or old_cost_price != new_cost_price:
