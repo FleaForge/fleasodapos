@@ -1,7 +1,7 @@
 from django.test import TestCase, Client as TestClient
 from django.contrib.auth.models import User
 from django.urls import reverse
-from .models import Product, ProductPriceHistory
+from .models import Product, ProductPriceHistory, ProductComponent, Client, Sale, SaleItem
 
 class PriceAndProfitabilityTests(TestCase):
     def setUp(self):
@@ -111,6 +111,7 @@ class PriceAndProfitabilityTests(TestCase):
         res_edit = self.client.get(reverse('edit_product', args=[p.id]))
         self.assertEqual(res_edit.status_code, 200)
         self.assertContains(res_edit, 'Fijación de Precios y Rentabilidad')
+        self.assertContains(res_edit, 'productEditor(1800, 2500, 8, 0)')
 
         # Product price history modal view
         res_hist = self.client.get(reverse('product_price_history', args=[p.id]))
@@ -288,6 +289,103 @@ class PriceAndProfitabilityTests(TestCase):
         self.assertEqual(res_pdf['Content-Type'], 'application/pdf')
         self.assertIn('Valorizacion_Inventario.pdf', res_pdf['Content-Disposition'])
         self.assertTrue(res_pdf.content.startswith(b'%PDF'))
+
+    def test_product_components_and_effective_cost(self):
+        # 1. Supply: Papel Fotográfico (bought at 308, sold at 500, stock 50)
+        paper = Product.objects.create(name='Papel Fotográfico A4', cost_price=308, price=500, stock=50)
+
+        # 2. Service: Impresión Papel Fotográfico (cost 0, price 1000, is_service=True)
+        service = Product.objects.create(name='Impresión Papel Fotográfico', cost_price=0, price=1000, stock=0, is_service=True)
+
+        # Link paper as component: 1 unit per print
+        comp = ProductComponent.objects.create(
+            parent_product=service,
+            component_product=paper,
+            quantity=1
+        )
+
+        service.refresh_from_db()
+        self.assertTrue(service.has_components)
+        self.assertEqual(service.components_cost, 308)
+        self.assertEqual(service.effective_cost, 308)
+        self.assertEqual(service.profit, 692) # 1000 - 308
+        self.assertEqual(service.margin_markup, 224.68) # ((1000 - 308) / 308) * 100
+        self.assertEqual(service.available_service_units, 50) # 50 paper / 1
+        self.assertEqual(service.cost_valuation, 0) # Services don't duplicate capital valuation
+
+    def test_checkout_deducts_components_and_records_effective_cost(self):
+        client = Client.objects.create(name='Cliente Impresiones', phone='3001112233')
+        paper = Product.objects.create(name='Papel Fotográfico Premium', cost_price=308, price=500, stock=20)
+        service = Product.objects.create(name='Foto 10x15 Impresa', cost_price=0, price=1000, stock=0, is_service=True)
+        ProductComponent.objects.create(parent_product=service, component_product=paper, quantity=1)
+
+        # Add service to cart with quantity 2
+        session = self.client.session
+        session['cart'] = {
+            str(service.id): {
+                'id': service.id,
+                'name': service.name,
+                'price': service.price,
+                'quantity': 2,
+                'image': ''
+            }
+        }
+        session.save()
+
+        # Checkout
+        res = self.client.post(reverse('checkout'), {
+            'client_id': client.id,
+            'payment_method': 'CASH',
+        }, follow=True)
+        self.assertEqual(res.status_code, 200)
+
+        # Verify sale and item
+        sale = Sale.objects.filter(client=client).last()
+        self.assertIsNotNone(sale)
+        self.assertEqual(sale.total, 2000)
+
+        sale_item = sale.items.first()
+        self.assertEqual(sale_item.product, service)
+        self.assertEqual(sale_item.quantity, 2)
+        self.assertEqual(sale_item.price, 1000)
+        self.assertEqual(sale_item.cost_price, 308) # Recorded effective cost, not 0!
+        self.assertEqual(sale_item.profit, 1384) # 2 * (1000 - 308)
+
+        # Verify stock of component was deducted
+        paper.refresh_from_db()
+        self.assertEqual(paper.stock, 18) # 20 - 2
+
+        # Verify service stock remained 0
+        service.refresh_from_db()
+        self.assertEqual(service.stock, 0)
+
+        # Annul sale and verify stock is restored
+        res_annul = self.client.post(reverse('annul_sale', args=[sale.id]), follow=True)
+        self.assertEqual(res_annul.status_code, 200)
+
+        paper.refresh_from_db()
+        self.assertEqual(paper.stock, 20) # Restored back to 20
+
+    def test_add_and_delete_product_component_views(self):
+        paper = Product.objects.create(name='Papel Bond Carta', cost_price=50, price=100, stock=100)
+        service = Product.objects.create(name='Fotocopia B/N', cost_price=0, price=200, stock=0, is_service=True)
+
+        # Add component via view
+        res_add = self.client.post(reverse('add_product_component', args=[service.id]), {
+            'component_product_id': paper.id,
+            'quantity': 1
+        }, follow=True)
+        self.assertEqual(res_add.status_code, 200)
+
+        comp = ProductComponent.objects.filter(parent_product=service, component_product=paper).first()
+        self.assertIsNotNone(comp)
+        self.assertEqual(comp.quantity, 1)
+
+        # Delete component via view
+        res_del = self.client.post(reverse('delete_product_component', args=[comp.id]), follow=True)
+        self.assertEqual(res_del.status_code, 200)
+        self.assertFalse(ProductComponent.objects.filter(id=comp.id).exists())
+
 
 
 

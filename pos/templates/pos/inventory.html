@@ -237,7 +237,7 @@
     <!-- MODAL: NUEVO PRODUCTO CON CALCULADORA RENT. -->
     <!-- ========================================== -->
     <div x-show="newProductOpen" 
-         class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto"
+         class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs p-2 sm:p-4 flex min-h-full items-end sm:items-center justify-center"
          style="display: none;"
          x-transition:enter="transition ease-out duration-200"
          x-transition:enter-start="opacity-0"
@@ -246,68 +246,73 @@
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0">
         
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-auto overflow-hidden border border-slate-200 my-8" 
+        <div class="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-xl mx-auto border border-slate-200 my-auto sm:my-8 flex flex-col max-h-[92vh] overflow-hidden" 
              @click.away="newProductOpen = false">
             
-            <div class="p-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex items-center justify-between">
+            <!-- Modal Header (Fixed at top) -->
+            <div class="p-3.5 sm:p-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex items-center justify-between shrink-0">
                 <div>
-                    <h3 class="text-xl font-black text-slate-800 tracking-tight">Nuevo Producto</h3>
-                    <p class="text-xs text-slate-500">Crea el producto con fijación interactiva de costos y rentabilidad</p>
+                    <h3 class="text-lg sm:text-xl font-black text-slate-800 tracking-tight">Nuevo Producto</h3>
+                    <p class="text-[11px] sm:text-xs text-slate-500">Fijación interactiva de costos, márgenes y precios</p>
                 </div>
-                <button type="button" @click="newProductOpen = false" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <button type="button" @click="newProductOpen = false" class="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition active:scale-95" title="Cerrar">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
                 </button>
             </div>
 
-            <form action="{% url 'add_product' %}" method="POST" enctype="multipart/form-data" class="p-6 space-y-4">
+            <!-- Modal Form (Scrollable body) -->
+            <form action="{% url 'add_product' %}" method="POST" enctype="multipart/form-data" class="overflow-y-auto p-3.5 sm:p-6 space-y-3.5 sm:space-y-4 flex-1">
                 {% csrf_token %}
 
                 <!-- Foto del Producto (Cámara o Archivo) -->
                 <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
                         Foto del Producto <span class="text-slate-400 font-normal lowercase">(opcional)</span>
                     </label>
-                    <div class="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 bg-slate-50/70" x-data="{ imagePreview: null }">
-                        <div class="relative w-14 h-14 rounded-lg border-2 border-dashed border-slate-300 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+                    <div class="flex items-center gap-3 p-2 sm:p-2.5 rounded-xl border border-slate-200 bg-slate-50/70" x-data="{ imagePreview: null }">
+                        <div class="relative w-12 h-12 sm:w-14 sm:h-14 rounded-lg border-2 border-dashed border-slate-300 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
                             <template x-if="imagePreview">
                                 <img :src="imagePreview" class="w-full h-full object-cover">
                             </template>
                             <template x-if="!imagePreview">
-                                <span class="text-2xl text-slate-300">📷</span>
+                                <span class="text-xl sm:text-2xl text-slate-300">📷</span>
                             </template>
                         </div>
                         <div class="flex-1 min-w-0">
                             <label class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold cursor-pointer transition active:scale-95 border border-slate-200 shadow-2xs">
-                                <svg class="w-3.5 h-3.5 text-brand-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <svg class="w-3.5 h-3.5 text-brand-600 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                 </svg>
-                                <span>Tomar o Elegir Foto</span>
+                                <span class="truncate">Tomar o Elegir Foto</span>
                                 <input type="file" name="image" accept="image/*" class="hidden" 
                                        @change="const f = $event.target.files[0]; if (f) { const r = new FileReader(); r.onload = (e) => imagePreview = e.target.result; r.readAsDataURL(f); }">
                             </label>
-                            <p class="text-[11px] text-slate-400 mt-1">Cámara del móvil o subir imagen</p>
+                            <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">Cámara del móvil o archivo</p>
                         </div>
                     </div>
                 </div>
 
+                <!-- Nombre -->
                 <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">Nombre <span class="text-rose-500">*</span></label>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Nombre <span class="text-rose-500">*</span></label>
                     <div class="flex items-stretch rounded-xl border border-slate-300 bg-white overflow-hidden shadow-2xs focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 transition">
-                        <span class="inline-flex items-center px-3.5 bg-slate-50 text-slate-400 border-r border-slate-200 select-none">
+                        <span class="inline-flex items-center px-3 bg-slate-50 text-slate-400 border-r border-slate-200 select-none">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
                             </svg>
                         </span>
-                        <input type="text" name="name" class="w-full px-3.5 py-2.5 text-slate-800 font-semibold text-sm outline-none bg-transparent" required placeholder="Ej: Arroz Diana 1kg">
+                        <input type="text" name="name" class="w-full px-3 py-2 sm:py-2.5 text-slate-800 font-semibold text-xs sm:text-sm outline-none bg-transparent" required placeholder="Ej: Arroz Diana 1kg">
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <!-- Código de Barras & Stock Inicial -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
+                    <!-- Código de Barras -->
                     <div>
-                        <div class="flex items-center justify-between mb-1.5">
+                        <div class="flex items-center justify-between mb-1">
                             <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">Código de Barras</label>
                             <button type="button" 
                                     onclick="openBarcodeScanner('new-product-barcode')"
@@ -317,31 +322,25 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                 </svg>
-                                <span>Usar Cámara</span>
+                                <span>Cámara</span>
                             </button>
                         </div>
                         <div class="flex items-stretch rounded-xl border border-slate-300 bg-white overflow-hidden shadow-2xs focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 transition">
-                            <span class="inline-flex items-center px-3 bg-slate-50 text-slate-400 border-r border-slate-200 select-none font-mono text-xs">
+                            <span class="inline-flex items-center px-2.5 bg-slate-50 text-slate-400 border-r border-slate-200 select-none font-mono text-xs">
                                 📟
                             </span>
-                            <input type="text" id="new-product-barcode" name="barcode" class="w-full px-3 py-2.5 text-slate-800 font-mono text-sm outline-none bg-transparent" placeholder="Escanear o escribir...">
-                            <button type="button" 
-                                    onclick="openBarcodeScanner('new-product-barcode')"
-                                    class="inline-flex items-center px-3 bg-slate-50 hover:bg-brand-50 text-slate-500 hover:text-brand-600 border-l border-slate-200 transition active:scale-95 group" 
-                                    title="Escanear código con cámara del móvil">
-                                <svg class="w-4 h-4 transition group-hover:scale-110" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
-                                </svg>
-                            </button>
+                            <input type="text" id="new-product-barcode" name="barcode" class="w-full px-2.5 py-2 text-slate-800 font-mono text-xs sm:text-sm outline-none bg-transparent" placeholder="Escanear o escribir...">
                         </div>
                     </div>
+
+                    <!-- Stock Inicial -->
                     <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">Stock Inicial <span class="text-rose-500">*</span></label>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Stock Inicial <span class="text-rose-500">*</span></label>
                         <div class="flex items-stretch rounded-xl border border-slate-300 bg-white overflow-hidden shadow-2xs focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 transition">
-                            <span class="inline-flex items-center px-3 bg-slate-50 text-slate-400 border-r border-slate-200 select-none">
+                            <span class="inline-flex items-center px-2.5 bg-slate-50 text-slate-400 border-r border-slate-200 select-none">
                                 📦
                             </span>
-                            <input type="number" name="stock" class="w-full px-3 py-2.5 text-slate-900 font-black text-sm outline-none bg-transparent font-mono" required placeholder="0" value="0">
+                            <input type="number" name="stock" class="w-full px-2.5 py-2 text-slate-900 font-black text-xs sm:text-sm outline-none bg-transparent font-mono" required placeholder="0" value="0">
                             <span class="inline-flex items-center px-2.5 bg-slate-50 text-slate-400 font-bold text-xs border-l border-slate-200 select-none">
                                 Unid.
                             </span>
@@ -350,19 +349,19 @@
                 </div>
 
                 <!-- SECCIÓN CALCULADORA RENTABILIDAD EN MODAL -->
-                <div class="p-4 rounded-xl bg-slate-50/80 border border-slate-200 space-y-3.5">
+                <div class="p-3 sm:p-4 rounded-xl bg-slate-50/80 border border-slate-200 space-y-3">
                     <div class="flex items-center justify-between pb-2 border-b border-slate-200 text-xs">
                         <span class="font-bold text-slate-800 flex items-center gap-1.5">
                             <span class="text-brand-500 font-black">📊</span>
-                            <span>Calculadora de Precios y Margen</span>
+                            <span>Fijación de Precios y Rentabilidad</span>
                         </span>
-                        <div class="inline-flex items-center p-0.5 bg-white rounded-lg border border-slate-200 text-[11px] font-bold">
+                        <div class="inline-flex items-center p-0.5 bg-white rounded-lg border border-slate-200 text-[11px] font-bold shrink-0">
                             <button type="button" @click="newProd.setMarginType('markup')" :class="newProd.marginType === 'markup' ? 'bg-brand-500 text-white shadow-2xs' : 'text-slate-600'" class="px-2 py-0.5 rounded-md transition">s/costo</button>
                             <button type="button" @click="newProd.setMarginType('margin')" :class="newProd.marginType === 'margin' ? 'bg-brand-500 text-white shadow-2xs' : 'text-slate-600'" class="px-2 py-0.5 rounded-md transition">s/venta</button>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
                         <!-- Costo -->
                         <div class="space-y-1">
                             <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600">Costo Compra</label>
@@ -403,9 +402,9 @@
                     </div>
 
                     <!-- Dynamic Profit Card inside modal -->
-                    <div class="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                    <div class="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-xs">
                         <span class="text-slate-500 font-bold">Ganancia Bruta Unitaria:</span>
-                        <div class="text-right flex items-center gap-2">
+                        <div class="flex items-center gap-2">
                             <span class="font-black text-sm font-mono" 
                                   :class="newProd.profit >= 0 ? 'text-emerald-700' : 'text-rose-600'"
                                   x-text="newProd.formatCurrency(newProd.profit)">
@@ -416,21 +415,34 @@
                     </div>
                 </div>
 
+                <!-- Motivo / Nota inicial -->
                 <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">Motivo / Nota inicial (Opcional)</label>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Motivo / Nota inicial <span class="text-slate-400 font-normal lowercase">(opcional)</span></label>
                     <div class="flex items-stretch rounded-xl border border-slate-300 bg-white overflow-hidden shadow-2xs focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 transition">
                         <span class="inline-flex items-center px-3 bg-slate-50 text-slate-400 border-r border-slate-200 select-none">
                             🏷️
                         </span>
-                        <input type="text" name="price_change_reason" class="w-full px-3.5 py-2.5 text-xs text-slate-800 outline-none bg-transparent" placeholder="Ej: Registro inicial con proveedor X">
+                        <input type="text" name="price_change_reason" class="w-full px-3 py-2 text-xs text-slate-800 outline-none bg-transparent" placeholder="Ej: Registro inicial con proveedor X">
                     </div>
                 </div>
 
-                <div class="mt-6 flex justify-end gap-2.5 pt-3 border-t border-slate-100">
-                    <button type="button" @click="newProductOpen = false" class="px-4 py-2.5 text-slate-600 hover:bg-slate-100 rounded-xl text-xs sm:text-sm font-bold transition">
+                <!-- Checkbox Servicio / Impresión -->
+                <div class="p-3 rounded-xl border border-slate-200 bg-slate-50 flex items-start gap-2.5">
+                    <input type="checkbox" id="modal_is_service" name="is_service" value="true" class="mt-0.5 w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500">
+                    <div>
+                        <label for="modal_is_service" class="text-xs font-bold text-slate-800 cursor-pointer block">
+                            ⚡ Es un Servicio o Impresión (Sin stock directo)
+                        </label>
+                        <p class="text-[11px] text-slate-500">Podrás vincular sus insumos (ej: papel fotográfico) en la pantalla de edición para que descuente inventario automáticamente.</p>
+                    </div>
+                </div>
+
+                <!-- Footer Buttons (Inside form, fixed at bottom of scroll area or bottom bar) -->
+                <div class="pt-3 border-t border-slate-100 grid grid-cols-2 sm:flex sm:justify-end gap-2.5">
+                    <button type="button" @click="newProductOpen = false" class="px-4 py-2.5 text-slate-600 hover:bg-slate-100 rounded-xl text-xs sm:text-sm font-bold transition text-center border border-slate-200 sm:border-transparent">
                         Cancelar
                     </button>
-                    <button type="submit" class="px-5 py-2.5 bg-brand-500 text-white rounded-xl hover:bg-brand-400 text-xs sm:text-sm font-extrabold transition shadow-md">
+                    <button type="submit" class="px-5 py-2.5 bg-brand-500 text-white rounded-xl hover:bg-brand-400 text-xs sm:text-sm font-extrabold transition shadow-md active:scale-95 text-center">
                         Guardar Producto
                     </button>
                 </div>
@@ -442,7 +454,7 @@
     <!-- MODAL: HISTORIAL DE PRECIOS VÍA HTMX       -->
     <!-- ========================================== -->
     <div x-show="historyOpen" 
-         class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto"
+         class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs p-2 sm:p-4 flex min-h-full items-center justify-center"
          style="display: none;"
          x-transition:enter="transition ease-out duration-200"
          x-transition:enter-start="opacity-0"
@@ -451,9 +463,9 @@
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0">
         
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-auto overflow-hidden border border-slate-200 my-8" 
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-auto border border-slate-200 my-auto sm:my-8 max-h-[92vh] flex flex-col overflow-hidden" 
              @click.away="historyOpen = false">
-            <div id="history-modal-content">
+            <div id="history-modal-content" class="overflow-y-auto">
                 <div class="p-8 text-center text-slate-400">
                     <div class="animate-spin w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full mx-auto mb-2"></div>
                     <p class="text-xs font-bold">Cargando historial de precios...</p>
@@ -466,7 +478,7 @@
     <!-- MODAL: CALCULADORA RÁPIDA SIMULADORA       -->
     <!-- ========================================== -->
     <div x-show="calcOpen" 
-         class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto"
+         class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs p-2 sm:p-4 flex min-h-full items-center justify-center"
          style="display: none;"
          x-transition:enter="transition ease-out duration-200"
          x-transition:enter-start="opacity-0"
@@ -475,7 +487,7 @@
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0">
         
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden border border-slate-200 my-8" 
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto border border-slate-200 my-auto sm:my-8 max-h-[92vh] flex flex-col overflow-hidden" 
              @click.away="calcOpen = false"
              x-data="{
                  simCost: 10000,

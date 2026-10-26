@@ -14,6 +14,7 @@ class Product(models.Model):
     cost_price = models.IntegerField(default=0, help_text="Precio de costo / compra")
     price = models.IntegerField(default=0, help_text="Precio de venta final (PVP)")
     stock = models.IntegerField(default=0)
+    is_service = models.BooleanField(default=False, help_text="Indica si es un servicio o producto que consume insumos")
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
     image = models.ImageField(upload_to='products/', null=True, blank=True)
 
@@ -21,38 +22,146 @@ class Product(models.Model):
         return self.name
 
     @property
+    def has_components(self):
+        """Verifica si este producto tiene insumos/componentes vinculados"""
+        return self.components.exists()
+
+    @property
+    def components_cost(self):
+        """Costo acumulado calculado a partir de sus insumos vinculados"""
+        return sum(comp.subtotal_cost for comp in self.components.select_related('component_product').all())
+
+    @property
+    def effective_cost(self):
+        """
+        Costo real de compra o producción:
+        - Si tiene insumos vinculados, suma el costo de sus insumos más cualquier costo directo base (cost_price).
+        - Si no tiene insumos, usa su cost_price directo.
+        """
+        if self.has_components:
+            return self.cost_price + self.components_cost
+        return self.cost_price
+
+    @property
     def profit(self):
-        """Ganancia unitaria en pesos: Precio venta - Costo de compra"""
-        return self.price - self.cost_price
+        """Ganancia unitaria en pesos: Precio venta - Costo real efectivo"""
+        return self.price - self.effective_cost
 
     @property
     def margin_markup(self):
         """Rentabilidad sobre el costo (Markup) %: ((Precio Venta - Costo) / Costo) * 100"""
-        if self.cost_price > 0:
-            return round(((self.price - self.cost_price) / self.cost_price) * 100, 2)
+        eff = self.effective_cost
+        if eff > 0:
+            return round(((self.price - eff) / eff) * 100, 2)
         return 100.0 if self.price > 0 else 0.0
 
     @property
     def margin_profit(self):
         """Margen comercial sobre la venta %: ((Precio Venta - Costo) / Precio Venta) * 100"""
         if self.price > 0:
-            return round(((self.price - self.cost_price) / self.price) * 100, 2)
+            return round(((self.price - self.effective_cost) / self.price) * 100, 2)
         return 0.0
 
     @property
     def cost_valuation(self):
-        """Valoración total del stock a costo"""
-        return self.cost_price * self.stock
+        """Valoración total del stock a costo (los servicios no duplican capital, se mide en sus insumos)"""
+        if self.is_service or (self.has_components and self.stock <= 0):
+            return 0
+        return self.effective_cost * self.stock
 
     @property
     def sale_valuation(self):
         """Valoración total del stock a precio de venta"""
+        if self.is_service or (self.has_components and self.stock <= 0):
+            return 0
         return self.price * self.stock
 
     @property
     def profit_valuation(self):
         """Ganancia potencial total sobre el stock actual"""
+        if self.is_service or (self.has_components and self.stock <= 0):
+            return 0
         return self.profit * self.stock
+
+    @property
+    def available_service_units(self):
+        """
+        Calcula cuántos servicios se pueden prestar según las existencias actuales de sus insumos.
+        Si no tiene insumos, devuelve su propio stock.
+        """
+        if not self.has_components:
+            return self.stock
+        availabilities = []
+        for comp in self.components.select_related('component_product').all():
+            if comp.quantity > 0:
+                availabilities.append(int(comp.component_product.stock // comp.quantity))
+        return min(availabilities) if availabilities else 0
+
+    def deduct_stock(self, quantity=1):
+        """
+        Descuenta inventario:
+        - Si tiene insumos vinculados, descuenta de cada insumo (ej: Papel fotográfico).
+        - De lo contrario, descuenta de su stock directo.
+        """
+        if self.has_components:
+            for comp in self.components.select_related('component_product').all():
+                qty_to_deduct = int(float(comp.quantity) * quantity)
+                comp.component_product.stock -= qty_to_deduct
+                comp.component_product.save(update_fields=['stock'])
+        else:
+            self.stock -= quantity
+            self.save(update_fields=['stock'])
+
+    def restore_stock(self, quantity=1):
+        """
+        Restaura inventario (en caso de anulación o retiro de ítem de venta):
+        - Si tiene insumos vinculados, reincorpora a los insumos.
+        - De lo contrario, restaura a su stock directo.
+        """
+        if self.has_components:
+            for comp in self.components.select_related('component_product').all():
+                qty_to_restore = int(float(comp.quantity) * quantity)
+                comp.component_product.stock += qty_to_restore
+                comp.component_product.save(update_fields=['stock'])
+        else:
+            self.stock += quantity
+            self.save(update_fields=['stock'])
+
+class ProductComponent(models.Model):
+    """
+    Componente / Insumo consumido por un servicio o producto compuesto.
+    Ejemplo: 1 Impresión fotográfica consume 1 Papel Fotográfico.
+    """
+    parent_product = models.ForeignKey(
+        Product, 
+        related_name='components', 
+        on_delete=models.CASCADE, 
+        help_text="Servicio o producto final que consume el insumo"
+    )
+    component_product = models.ForeignKey(
+        Product, 
+        related_name='used_in_products', 
+        on_delete=models.CASCADE, 
+        help_text="Insumo o materia prima que se descuenta del inventario"
+    )
+    quantity = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=1.0, 
+        help_text="Cantidad consumida por cada venta (ej: 1 hoja, 0.5 unidades, etc.)"
+    )
+
+    class Meta:
+        unique_together = ('parent_product', 'component_product')
+        verbose_name = 'Insumo de Producto'
+        verbose_name_plural = 'Insumos de Productos'
+
+    @property
+    def subtotal_cost(self):
+        return int(float(self.quantity) * self.component_product.effective_cost)
+
+    def __str__(self):
+        return f"{self.quantity} x {self.component_product.name} en {self.parent_product.name}"
 
 class ProductPriceHistory(models.Model):
     product = models.ForeignKey(Product, related_name='price_history', on_delete=models.CASCADE)

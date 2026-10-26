@@ -6,9 +6,21 @@
             <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200 font-mono">
                 {% if product.barcode %}{{ product.barcode }}{% else %}#{{ product.id }}{% endif %}
             </span>
-            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold border {% if product.stock <= 0 %}bg-rose-50 text-rose-700 border-rose-200{% elif product.stock <= 5 %}bg-amber-50 text-amber-700 border-amber-200{% else %}bg-emerald-50 text-emerald-700 border-emerald-200{% endif %}">
-                {% if product.stock <= 0 %}Agotado{% elif product.stock <= 5 %}Bajo: {{ product.stock }}{% else %}{{ product.stock }} Disp.{% endif %}
-            </span>
+            <div class="flex items-center gap-1 flex-wrap justify-end">
+                {% if product.has_components %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold border bg-indigo-50 text-indigo-700 border-indigo-200 font-mono">
+                    🧪 {{ product.available_service_units }} disp. (insumos)
+                </span>
+                {% elif product.is_service %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
+                    ⚡ Servicio
+                </span>
+                {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold border {% if product.stock <= 0 %}bg-rose-50 text-rose-700 border-rose-200{% elif product.stock <= 5 %}bg-amber-50 text-amber-700 border-amber-200{% else %}bg-emerald-50 text-emerald-700 border-emerald-200{% endif %}">
+                    {% if product.stock <= 0 %}Agotado{% elif product.stock <= 5 %}Bajo: {{ product.stock }}{% else %}{{ product.stock }} Disp.{% endif %}
+                </span>
+                {% endif %}
+            </div>
         </div>
 
         <div class="flex items-center gap-3">
@@ -34,7 +46,13 @@
         
         <div class="flex justify-between items-baseline text-xs">
             <span class="text-slate-500">Costo Compra:</span>
-            <span class="font-bold text-slate-700 font-mono">${{ product.cost_price|intcomma }}</span>
+            {% if product.cost_price == 0 and product.has_components %}
+            <span class="font-bold text-indigo-700 font-mono" title="Calculado de sus insumos (${{ product.components_cost|intcomma }})">
+                ${{ product.effective_cost|intcomma }} (Insumos)
+            </span>
+            {% else %}
+            <span class="font-bold text-slate-700 font-mono">${{ product.effective_cost|intcomma }}</span>
+            {% endif %}
         </div>
 
         <div class="pt-2 border-t border-slate-200 flex justify-between items-center text-xs">
@@ -72,6 +90,13 @@
 
     <!-- Actions Footer -->
     <div class="mt-4 pt-3 border-t border-slate-100 space-y-2.5">
+        {% if product.has_components or product.is_service %}
+        <a href="{% url 'edit_product' product.id %}" 
+           class="flex items-center justify-center gap-1.5 w-full text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 py-2 rounded-xl transition border border-indigo-200 shadow-2xs">
+            <span>🧪</span>
+            <span>Gestionar Insumos / Receta</span>
+        </a>
+        {% else %}
         <!-- Add Stock Full Width Input Group -->
         <form action="{% url 'add_stock' product.id %}" method="post" 
               class="flex items-stretch rounded-xl border border-slate-200 bg-slate-50/80 overflow-hidden focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/15 transition shadow-2xs">
@@ -88,6 +113,7 @@
                 <span>+</span>
             </button>
         </form>
+        {% endif %}
 
         <!-- Navigation Buttons: Editar & Historial (50% / 50%) -->
         <div class="grid grid-cols-2 gap-2">

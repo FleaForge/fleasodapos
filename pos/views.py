@@ -3,7 +3,7 @@ from django.db.models import Sum, Q, F, Count
 from django.utils import timezone
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
-from .models import Product, ProductPriceHistory, Client, Sale, SaleItem, Payment
+from .models import Product, ProductPriceHistory, Client, Sale, SaleItem, Payment, ProductComponent
 from django.template.loader import get_template, render_to_string
 from xhtml2pdf import pisa
 import json
@@ -773,11 +773,10 @@ def checkout(request):
                 product=product,
                 quantity=item['quantity'],
                 price=item['price'],
-                cost_price=product.cost_price
+                cost_price=product.effective_cost
             )
-            # Update stock
-            product.stock -= item['quantity']
-            product.save()
+            # Update stock (deducts components if product has recipe/supplies, or direct stock)
+            product.deduct_stock(item['quantity'])
             
         request.session['cart'] = {}
         messages.success(request, f'Venta #{sale.id} registrada correctamente')
@@ -790,6 +789,7 @@ def add_product(request):
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
         barcode = request.POST.get('barcode', '').strip() or None
+        is_service = request.POST.get('is_service') in ('true', 'on', '1')
         
         try:
             cost_price = int(float(request.POST.get('cost_price') or 0))
@@ -814,6 +814,7 @@ def add_product(request):
             cost_price=cost_price,
             price=price,
             stock=stock,
+            is_service=is_service,
             image=image
         )
         
@@ -1325,6 +1326,7 @@ def edit_product(request, product_id):
                     pass
             product.image = None
 
+        product.is_service = request.POST.get('is_service') in ('true', 'on', '1')
         product.save()
         
         # Detectar si hubo cambio de precio o costo
@@ -1354,10 +1356,52 @@ def edit_product(request, product_id):
         return redirect('inventory')
         
     price_history = product.price_history.select_related('user').order_by('-date')
+    components = product.components.select_related('component_product').all()
+    available_supplies = Product.objects.exclude(id=product.id).order_by('name')
     return render(request, 'pos/edit_product.html', {
         'product': product,
-        'price_history': price_history
+        'price_history': price_history,
+        'components': components,
+        'available_supplies': available_supplies,
     })
+
+@login_required
+def add_product_component(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    if request.method == 'POST':
+        component_id = request.POST.get('component_product_id')
+        quantity_str = request.POST.get('quantity', '1')
+        try:
+            quantity = max(1, int(quantity_str))
+        except (ValueError, TypeError):
+            quantity = 1
+            
+        if component_id:
+            try:
+                component_product = Product.objects.get(id=component_id)
+                if component_product.id != product.id:
+                    comp, created = ProductComponent.objects.get_or_create(
+                        parent_product=product,
+                        component_product=component_product,
+                        defaults={'quantity': quantity}
+                    )
+                    if not created:
+                        comp.quantity += quantity
+                        comp.save(update_fields=['quantity'])
+                    messages.success(request, f'Insumo "{component_product.name}" agregado a la receta correctamente.')
+            except Product.DoesNotExist:
+                messages.error(request, 'El insumo seleccionado no existe.')
+    return redirect('edit_product', product_id=product.id)
+
+@login_required
+def delete_product_component(request, component_id):
+    component = get_object_or_404(ProductComponent, id=component_id)
+    product_id = component.parent_product_id
+    if request.method == 'POST':
+        name = component.component_product.name
+        component.delete()
+        messages.success(request, f'Insumo "{name}" retirado de la receta.')
+    return redirect('edit_product', product_id=product_id)
 
 @login_required
 def product_price_history(request, product_id):
@@ -1486,12 +1530,11 @@ def add_product_to_sale(request, sale_id):
                 product=product,
                 quantity=1,
                 price=product.price,
-                cost_price=product.cost_price
+                cost_price=product.effective_cost
             )
         
         # Update stock
-        product.stock -= 1
-        product.save()
+        product.deduct_stock(1)
         
         # Recalculate total
         sale.total = sum(item.subtotal for item in sale.items.all())
@@ -1520,8 +1563,7 @@ def update_sale_item(request, sale_id, item_id):
             item.quantity += 1
             item.save()
             # Decrease stock
-            item.product.stock -= 1
-            item.product.save()
+            item.product.deduct_stock(1)
             
         elif action == 'decrement':
             if item.quantity > 1:
@@ -1529,18 +1571,15 @@ def update_sale_item(request, sale_id, item_id):
                 item.quantity -= 1
                 item.save()
                 # Increase stock
-                item.product.stock += 1
-                item.product.save()
+                item.product.restore_stock(1)
             else:
                 # Remove item if quantity would be 0
-                item.product.stock += item.quantity
-                item.product.save()
+                item.product.restore_stock(item.quantity)
                 item.delete()
                 
         elif action == 'remove':
             # Return stock
-            item.product.stock += item.quantity
-            item.product.save()
+            item.product.restore_stock(item.quantity)
             # Delete item
             item.delete()
         
@@ -1568,8 +1607,7 @@ def annul_sale(request, sale_id):
             
             # Return stock
             for item in sale.items.all():
-                item.product.stock += item.quantity
-                item.product.save()
+                item.product.restore_stock(item.quantity)
             
             messages.success(request, f'La factura #{sale.id} ha sido anulada y el inventario restaurado.')
         else:

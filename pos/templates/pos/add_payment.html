@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-{% load humanize %}
+{% load humanize l10n %}
 <html lang="es">
 
 <head>
@@ -84,14 +84,14 @@
 
     <div class="max-w-3xl w-full bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-gray-200"
          x-data="paymentForm(
-            {{ current_debt }},
+            {{ current_debt|unlocalize }},
             [
                 {% for sale in pending_sales %}
                 { 
-                    id: {{ sale.id }}, 
-                    total: {{ sale.total }}, 
-                    pending: {{ sale.pending_balance }}, 
-                    paid: {{ sale.amount_paid }}, 
+                    id: {{ sale.id|unlocalize }}, 
+                    total: {{ sale.total|unlocalize }}, 
+                    pending: {{ sale.pending_balance|unlocalize }}, 
+                    paid: {{ sale.amount_paid|unlocalize }}, 
                     ref: '{% if sale.is_adjustment %}Ajuste #{{ sale.id }}{% else %}Factura #{{ sale.id }}{% endif %}', 
                     isAdjustment: {% if sale.is_adjustment %}true{% else %}false{% endif %},
                     note: '{{ sale.note|default:""|escapejs }}',

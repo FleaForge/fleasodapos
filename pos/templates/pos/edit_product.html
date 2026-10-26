@@ -1,9 +1,9 @@
 {% extends 'pos/base.html' %}
-{% load humanize %}
+{% load humanize l10n %}
 
 {% block content %}
 <div class="max-w-3xl mx-auto py-4 sm:py-6 space-y-6" 
-     x-data="productEditor({{ product.cost_price|default:0 }}, {{ product.price|default:0 }}, {{ product.stock|default:0 }})">
+     x-data="productEditor({{ product.cost_price|unlocalize|default:0 }}, {{ product.price|unlocalize|default:0 }}, {{ product.stock|unlocalize|default:0 }}, {{ product.components_cost|unlocalize|default:0 }})">
 
     <!-- Main Card -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -15,6 +15,16 @@
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 font-mono">
                         ID #{{ product.id }}
                     </span>
+                    {% if product.has_components %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        🧪 Con Insumos ({{ product.available_service_units }} disp.)
+                    </span>
+                    {% endif %}
+                    {% if product.is_service %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                        ⚡ Servicio
+                    </span>
+                    {% endif %}
                     <span 
                         :class="stock <= 0 ? 'bg-rose-50 text-rose-700 border-rose-200' : (stock <= 5 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200')"
                         class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold border transition-colors"
@@ -222,6 +232,12 @@
                             </span>
                         </div>
                         <span class="text-[11px] text-slate-400 block truncate">Pagado al proveedor</span>
+                        {% if product.has_components %}
+                        <div class="mt-1.5 p-2 rounded-lg bg-indigo-50 border border-indigo-100 text-[11px] text-indigo-700 flex flex-col gap-0.5">
+                            <span class="font-bold">🧪 Insumos vinculados: ${{ product.components_cost|intcomma }} COP</span>
+                            <span class="text-[10px] text-indigo-600">Al venderse, se usa este costo para la ganancia si dejas costo propio en $0.</span>
+                        </div>
+                        {% endif %}
                     </div>
 
                     <!-- 2. Rentabilidad % -->
@@ -427,6 +443,26 @@
                 </div>
             </div>
 
+            <!-- Checkbox de Servicio / Impresión sin Stock Directo -->
+            <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 flex items-start gap-3">
+                <input 
+                    type="checkbox" 
+                    id="is_service" 
+                    name="is_service" 
+                    value="true"
+                    {% if product.is_service %}checked{% endif %}
+                    class="mt-1 w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"
+                />
+                <div>
+                    <label for="is_service" class="text-xs font-bold uppercase tracking-wider text-slate-800 cursor-pointer block">
+                        ⚡ Marcar como Servicio / Impresión (Disponibilidad calculada por insumos)
+                    </label>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                        Activa esta opción para servicios de impresión, plastificado o preparación. Su capacidad se calculará automáticamente según el stock de sus <strong>insumos vinculados</strong> (ej: hojas de papel fotográfico), evitando conteos erróneos de stock físico directo.
+                    </p>
+                </div>
+            </div>
+
             <!-- Valuación del Inventario de este Producto -->
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs">
                 <div>
@@ -471,6 +507,176 @@
                 </a>
             </div>
         </form>
+    </div>
+
+    <!-- SECCIÓN: INSUMOS Y RECETA DE CONSUMO (ESCANDALLO) -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <!-- Header -->
+        <div class="p-5 sm:p-6 border-b border-slate-100 bg-gradient-to-r from-indigo-50/70 via-slate-50 to-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg shadow-2xs shrink-0">
+                    🧪
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-sm sm:text-base font-black text-slate-800">Insumos y Receta de Consumo</h3>
+                        {% if product.has_components %}
+                        <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-100 text-indigo-700 border border-indigo-200 font-mono">
+                            {{ components|length }} insumo(s)
+                        </span>
+                        {% endif %}
+                    </div>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                        Materiales o artículos de inventario que se descuentan automáticamente cada vez que se vende este servicio o producto.
+                    </p>
+                </div>
+            </div>
+
+            {% if product.has_components %}
+            <div class="text-left sm:text-right bg-white p-2.5 rounded-xl border border-indigo-100 shadow-2xs self-start sm:self-auto">
+                <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">Capacidad estimada</span>
+                <span class="text-sm font-black text-indigo-700 font-mono">
+                    {{ product.available_service_units }} servicios posibles
+                </span>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Component List / Table -->
+        <div class="p-5 sm:p-6 space-y-4">
+            {% if components %}
+            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                <table class="w-full text-left text-xs sm:text-sm">
+                    <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                        <tr>
+                            <th class="py-3 px-4">Insumo / Material</th>
+                            <th class="py-3 px-4 text-center">Cant. Consumida</th>
+                            <th class="py-3 px-4 text-right">Costo Unit. Insumo</th>
+                            <th class="py-3 px-4 text-right">Subtotal Costo</th>
+                            <th class="py-3 px-4 text-center">Stock Actual</th>
+                            <th class="py-3 px-4 text-center">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for comp in components %}
+                        <tr class="hover:bg-slate-50/70 transition-colors">
+                            <td class="py-3 px-4">
+                                <div class="font-bold text-slate-800">{{ comp.component_product.name }}</div>
+                                <div class="text-[11px] text-slate-400 font-mono">
+                                    {% if comp.component_product.barcode %}Código: {{ comp.component_product.barcode }}{% else %}ID: #{{ comp.component_product.id }}{% endif %}
+                                </div>
+                            </td>
+                            <td class="py-3 px-4 text-center font-bold text-slate-700 font-mono">
+                                {{ comp.quantity }} unid(s)
+                            </td>
+                            <td class="py-3 px-4 text-right text-slate-600 font-mono">
+                                ${{ comp.component_product.cost_price|intcomma }}
+                            </td>
+                            <td class="py-3 px-4 text-right font-black text-slate-900 font-mono">
+                                ${{ comp.subtotal_cost|intcomma }}
+                            </td>
+                            <td class="py-3 px-4 text-center">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold {% if comp.component_product.stock <= 0 %}bg-rose-50 text-rose-700 border border-rose-200{% elif comp.component_product.stock <= 5 %}bg-amber-50 text-amber-700 border border-amber-200{% else %}bg-emerald-50 text-emerald-700 border border-emerald-200{% endif %} font-mono">
+                                    {{ comp.component_product.stock }} disp.
+                                </span>
+                            </td>
+                            <td class="py-3 px-4 text-center">
+                                <form action="{% url 'delete_product_component' comp.id %}" method="post" onsubmit="return confirm('¿Deseas retirar este insumo de la receta?');">
+                                    {% csrf_token %}
+                                    <button type="submit" 
+                                            class="inline-flex items-center gap-1 text-xs font-bold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 px-2.5 py-1.5 rounded-lg border border-rose-200 transition active:scale-95"
+                                            title="Retirar insumo">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                        </svg>
+                                        <span>Quitar</span>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="bg-indigo-50/50 border-t border-slate-200 font-bold text-slate-800">
+                        <tr>
+                            <td colspan="3" class="py-3 px-4 text-right uppercase text-xs tracking-wider text-slate-600">
+                                Costo Total Insumos por Venta:
+                            </td>
+                            <td class="py-3 px-4 text-right font-black text-indigo-700 text-sm font-mono">
+                                ${{ product.components_cost|intcomma }} COP
+                            </td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Resumen de Margen Real del Servicio -->
+            <div class="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50/70 to-indigo-50/70 border border-emerald-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
+                <div class="flex items-center gap-2">
+                    <span class="text-lg">✨</span>
+                    <div>
+                        <span class="font-bold text-slate-800 block">Rentabilidad Real Calculada:</span>
+                        <span class="text-slate-600">
+                            Venta: <strong class="text-slate-800">${{ product.price|intcomma }}</strong> - Insumos: <strong class="text-indigo-700">${{ product.components_cost|intcomma }}</strong> = 
+                            <strong class="text-emerald-700 font-mono font-black">+${{ product.profit|intcomma }} Ganancia por venta</strong>
+                        </span>
+                    </div>
+                </div>
+                <div class="text-right shrink-0">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        +{{ product.margin_markup }}% Markup
+                    </span>
+                </div>
+            </div>
+
+            {% else %}
+            <!-- Estado vacío cuando no hay insumos -->
+            <div class="p-6 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50">
+                <div class="text-2xl mb-1.5">📦</div>
+                <h4 class="text-xs sm:text-sm font-bold text-slate-700">Sin insumos vinculados actualmente</h4>
+                <p class="text-[11px] sm:text-xs text-slate-400 max-w-md mx-auto mt-0.5">
+                    Este producto se descuenta de su propio stock individual. Si es un servicio de impresión o preparación que gasta materiales (papel fotográfico, vasos, tinta, etc.), selecciónalos abajo para que resten stock automáticamente al vender.
+                </p>
+            </div>
+            {% endif %}
+
+            <!-- Formulario para Vincular Insumo -->
+            <div class="pt-4 border-t border-slate-200">
+                <h4 class="text-xs font-black uppercase tracking-wider text-slate-700 mb-2.5 flex items-center gap-1.5">
+                    <span>➕ Vincular Insumo a la Receta</span>
+                </h4>
+                <form action="{% url 'add_product_component' product.id %}" method="post" 
+                      class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    {% csrf_token %}
+                    
+                    <div class="sm:col-span-7 space-y-1">
+                        <label class="block text-xs font-bold text-slate-600">Seleccionar Insumo del Inventario:</label>
+                        <select name="component_product_id" required 
+                                class="w-full text-xs font-bold text-slate-800 px-3 py-2.5 rounded-xl border border-slate-300 bg-white outline-none focus:border-brand-500 shadow-2xs">
+                            <option value="">-- Elige un artículo / insumo --</option>
+                            {% for supply in available_supplies %}
+                            <option value="{{ supply.id }}">
+                                {{ supply.name }} (Stock: {{ supply.stock }} | Costo: ${{ supply.cost_price|intcomma }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="sm:col-span-2 space-y-1">
+                        <label class="block text-xs font-bold text-slate-600">Cant. a restar:</label>
+                        <input type="number" name="quantity" value="1" min="1" step="1" required
+                               class="w-full text-xs font-bold text-slate-800 px-3 py-2.5 rounded-xl border border-slate-300 bg-white outline-none focus:border-brand-500 shadow-2xs text-center font-mono">
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <button type="submit" 
+                                class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition shadow-2xs flex items-center justify-center gap-1.5 active:scale-95">
+                            <span>+ Vincular Insumo</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <!-- SECCIÓN: HISTORIAL DE CAMBIOS DE PRECIOS DEL ARTÍCULO -->
@@ -567,21 +773,28 @@
 
 <!-- Script Alpine de la Calculadora Bidireccional de Rentabilidad -->
 <script>
-function productEditor(initialCost, initialPrice, initialStock) {
+function productEditor(initialCost, initialPrice, initialStock, initialComponentsCost) {
     return {
         cost: Number(initialCost) || 0,
         price: Number(initialPrice) || 0,
         stock: Number(initialStock) || 0,
+        componentsCost: Number(initialComponentsCost) || 0,
         marginPercent: 30,
         marginType: 'markup', // 'markup' (% s/costo) o 'margin' (% s/venta)
         lastChanged: initialPrice > 0 ? 'price' : 'margin',
 
         init() {
-            if (this.cost > 0 && this.price > 0) {
+            if (this.price > 0) {
                 this.recalculateMarginFromPrice();
-            } else if (this.cost > 0 && this.price === 0) {
+            } else if (this.effectiveCost > 0) {
                 this.recalculatePriceFromMargin();
             }
+        },
+
+        get effectiveCost() {
+            const c = Number(this.cost) || 0;
+            const comp = Number(this.componentsCost) || 0;
+            return c + comp;
         },
 
         onCostChange() {
@@ -618,7 +831,7 @@ function productEditor(initialCost, initialPrice, initialStock) {
         },
 
         recalculatePriceFromMargin() {
-            const c = Number(this.cost) || 0;
+            const c = this.effectiveCost;
             const m = Number(this.marginPercent) || 0;
             if (c <= 0) return;
 
@@ -633,7 +846,7 @@ function productEditor(initialCost, initialPrice, initialStock) {
         },
 
         recalculateMarginFromPrice() {
-            const c = Number(this.cost) || 0;
+            const c = this.effectiveCost;
             const p = Number(this.price) || 0;
             if (c <= 0 || p <= 0) {
                 this.marginPercent = (c <= 0 && p > 0) ? 100 : 0;
@@ -648,18 +861,18 @@ function productEditor(initialCost, initialPrice, initialStock) {
         },
 
         get profitAmount() {
-            return (Number(this.price) || 0) - (Number(this.cost) || 0);
+            return (Number(this.price) || 0) - this.effectiveCost;
         },
 
         get markupPercent() {
-            const c = Number(this.cost) || 0;
+            const c = this.effectiveCost;
             const p = Number(this.price) || 0;
             if (c <= 0) return p > 0 ? 100 : 0;
             return Math.round(((p - c) / c) * 1000) / 10;
         },
 
         get salesMarginPercent() {
-            const c = Number(this.cost) || 0;
+            const c = this.effectiveCost;
             const p = Number(this.price) || 0;
             if (p <= 0) return 0;
             return Math.round(((p - c) / p) * 1000) / 10;
