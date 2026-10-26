@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="max-w-3xl mx-auto py-4 sm:py-6 space-y-6" 
-     x-data="productEditor({{ product.cost_price|unlocalize|default:0 }}, {{ product.price|unlocalize|default:0 }}, {{ product.stock|unlocalize|default:0 }}, {{ product.components_cost|unlocalize|default:0 }})">
+     x-data="productEditor({{ product.cost_price|unlocalize|default:0 }}, {{ product.price|unlocalize|default:0 }}, {{ product.stock|unlocalize|default:0 }}, {{ product.components_cost|unlocalize|default:0 }}, {% if product.is_service %}true{% else %}false{% endif %}, {% if product.has_components %}true{% else %}false{% endif %})">
 
     <!-- Main Card -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -15,6 +15,11 @@
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 font-mono">
                         ID #{{ product.id }}
                     </span>
+                    {% if not product.is_active %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-black bg-rose-100 text-rose-800 border border-rose-300">
+                        🚫 Dado de Baja / Inactivo
+                    </span>
+                    {% endif %}
                     {% if product.has_components %}
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
                         🧪 Con Insumos ({{ product.available_service_units }} disp.)
@@ -419,7 +424,21 @@
                             Unidades
                         </span>
                     </div>
+                    {% if product.has_components %}
+                    <div class="mt-1.5 p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-900 flex items-center justify-between gap-2 shadow-2xs">
+                        <div>
+                            <span>🧪 <strong>Capacidad en POS:</strong> Calculada por insumos (<strong>{{ product.available_service_units }} disp.</strong>).</span>
+                            <span class="block text-[10px] text-indigo-600 mt-0.5">El POS solo permitirá vender las unidades que cubran tus insumos.</span>
+                        </div>
+                        {% if product.stock > 0 %}
+                        <button type="button" @click="stock = 0" class="text-xs font-bold px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-2xs whitespace-nowrap transition active:scale-95">
+                            Poner Stock en 0
+                        </button>
+                        {% endif %}
+                    </div>
+                    {% else %}
                     <span class="text-[11px] text-slate-400 mt-1 block">Existencias físicas en bodega</span>
+                    {% endif %}
                 </div>
 
                 <!-- Motivo del Cambio de Precio (Historial) -->
@@ -448,46 +467,146 @@
             </div>
 
             <!-- Checkbox de Servicio / Impresión sin Stock Directo -->
-            <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 flex items-start gap-3">
+            <div class="p-4 rounded-xl border {% if product.has_components %}border-indigo-200 bg-indigo-50/50{% else %}border-slate-200 bg-slate-50/70{% endif %} flex items-start gap-3">
                 <input 
                     type="checkbox" 
                     id="is_service" 
                     name="is_service" 
                     value="true"
-                    {% if product.is_service %}checked{% endif %}
-                    class="mt-1 w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"
+                    {% if product.is_service or product.has_components %}checked{% endif %}
+                    @change="isService = $event.target.checked; if (isService && stock > 0) { if(confirm('¿Deseas poner el stock en 0 para este servicio? Los servicios operan sin stock directo para no inflar la bodega.')) stock = 0; }"
+                    class="mt-1 w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500 cursor-pointer"
                 />
-                <div>
+                <div class="flex-1">
                     <label for="is_service" class="text-xs font-bold uppercase tracking-wider text-slate-800 cursor-pointer block">
-                        ⚡ Marcar como Servicio / Impresión (Disponibilidad calculada por insumos)
+                        {% if product.has_components %}
+                        🧪 Servicio con Receta de Insumos (Venta limitada al stock de insumos)
+                        {% else %}
+                        ⚡ Marcar como Servicio / Impresión (Disponibilidad calculada por insumos o ilimitada)
+                        {% endif %}
                     </label>
                     <p class="text-xs text-slate-500 mt-0.5">
-                        Activa esta opción para servicios de impresión, plastificado o preparación. Su capacidad se calculará automáticamente según el stock de sus <strong>insumos vinculados</strong> (ej: hojas de papel fotográfico), evitando conteos erróneos de stock físico directo.
+                        {% if product.has_components %}
+                        Este artículo tiene insumos vinculados abajo. <strong>Solo se podrá vender en el POS si hay existencias suficientes de sus insumos</strong> y su valoración en bodega es $0 para no duplicar capital.
+                        {% else %}
+                        Activa esta opción para trámites (hojas de vida, certificados) o servicios de impresión y plastificado. 
+                        <strong>No inmoviliza capital en bodega (valoración $0)</strong> y su capacidad se calcula automáticamente según sus insumos vinculados o de forma libre.
+                        {% endif %}
                     </p>
                 </div>
             </div>
+
+            {% if product.stock > 0 and product.is_service %}
+            <!-- Alerta y Corrección Directa de Stock Residual en Servicio -->
+            <div class="p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 shadow-2xs">
+                <div class="flex items-start gap-2.5">
+                    <span class="text-base shrink-0">⚠️</span>
+                    <div>
+                        <strong class="font-bold">Stock ficticio detectado: {{ product.stock }} unidades</strong>
+                        <p class="text-amber-700 text-[11px] mt-0.5">
+                            Este servicio tiene stock físico asignado, lo que inflaría el capital en bodega. En FleasoDaPos los servicios deben operar con stock en 0.
+                        </p>
+                    </div>
+                </div>
+                <button type="button" 
+                        @click="stock = 0"
+                        class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-xs whitespace-nowrap active:scale-95 transition flex items-center justify-center gap-1.5">
+                    <span>⚡</span>
+                    <span>Poner Stock en 0</span>
+                </button>
+            </div>
+            {% endif %}
 
             <!-- Valuación del Inventario de este Producto -->
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs">
                 <div>
                     <span class="text-slate-500 font-bold block">Inversión Stock (Costo):</span>
-                    <span class="font-black text-slate-800 text-sm font-mono" x-text="formatCurrency(cost * stock)">
+                    <span class="font-black text-slate-800 text-sm font-mono" 
+                          x-text="(isService || hasComponents) ? '$0 COP (Servicio)' : formatCurrency(cost * stock)">
                         $0 COP
                     </span>
+                    <template x-if="isService || hasComponents">
+                        <span class="block text-[10px] text-slate-400 mt-0.5">El capital está en sus insumos físicos</span>
+                    </template>
                 </div>
                 <div>
                     <span class="text-slate-500 font-bold block">Valor Venta Stock:</span>
-                    <span class="font-black text-brand-600 text-sm font-mono" x-text="formatCurrency(price * stock)">
+                    <span class="font-black text-brand-600 text-sm font-mono" 
+                          x-text="(isService || hasComponents) ? '$0 COP (Servicio)' : formatCurrency(price * stock)">
                         $0 COP
                     </span>
+                    <template x-if="isService || hasComponents">
+                        <span class="block text-[10px] text-slate-400 mt-0.5">No inmoviliza dinero terminado</span>
+                    </template>
                 </div>
                 <div>
                     <span class="text-slate-500 font-bold block">Ganancia Potencial Stock:</span>
                     <span class="font-black text-sm font-mono" 
-                          :class="profitAmount > 0 ? 'text-emerald-700' : (profitAmount === 0 ? 'text-slate-700' : 'text-rose-600')"
-                          x-text="formatCurrency(profitAmount * stock)">
+                          :class="(isService || hasComponents) ? 'text-slate-700' : (profitAmount > 0 ? 'text-emerald-700' : (profitAmount === 0 ? 'text-slate-700' : 'text-rose-600'))"
+                          x-text="(isService || hasComponents) ? '$0 COP' : formatCurrency(profitAmount * stock)">
                         $0 COP
                     </span>
+                    <template x-if="isService || hasComponents">
+                        <span class="block text-[10px] text-slate-400 mt-0.5">Se genera al prestar el servicio</span>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Apartado de Estado y Baja del Producto -->
+            <div class="p-4 sm:p-5 rounded-2xl border {% if not product.is_active %}border-rose-300 bg-rose-50/50{% else %}border-slate-200 bg-slate-50/70{% endif %} flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div class="space-y-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-sm font-black {% if not product.is_active %}text-rose-800{% else %}text-slate-800{% endif %}">
+                            {% if product.is_active %}
+                            📦 Estado: Activo en Venta
+                            {% else %}
+                            🚫 Estado: Dado de Baja (Inactivo)
+                            {% endif %}
+                        </span>
+                        <span class="text-xs px-2.5 py-0.5 rounded-full font-bold {% if product.is_active %}bg-emerald-100 text-emerald-800{% else %}bg-rose-100 text-rose-800{% endif %}">
+                            {% if product.is_active %}Visible en POS{% else %}Oculto en POS{% endif %}
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500 max-w-xl">
+                        {% if product.is_active %}
+                            {% if product.stock <= 0 %}
+                            Este producto se encuentra agotado (stock = 0). Puedes darlo de baja para moverlo al apartado de inactivos y retirarlo de la venta.
+                            {% else %}
+                            Este producto tiene <strong>{{ product.stock }} unidades</strong> en inventario. Solo se puede dar de baja una vez que el inventario esté agotado (stock = 0).
+                            {% endif %}
+                        {% else %}
+                        Este producto fue dado de baja y está archivado en el apartado de Inactivos. Puedes reactivarlo cuando recibas nuevo stock o desees volverlo a vender.
+                        {% endif %}
+                    </p>
+                </div>
+
+                <div class="shrink-0">
+                    {% if product.is_active %}
+                        {% if product.stock <= 0 %}
+                        <button type="button" 
+                                onclick="if(confirm('¿Seguro que deseas dar de baja este producto agotado? Se ocultará de la venta y se moverá al apartado de inactivos.')) { document.getElementById('form-toggle-status-edit').submit(); }"
+                                class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs transition active:scale-95 shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                            <span>Dar de Baja (Agotado)</span>
+                        </button>
+                        {% else %}
+                        <span class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-200/80 text-slate-500 font-bold text-xs" 
+                              title="El producto debe estar en stock 0 para poder darse de baja">
+                            <span>🔒 Stock activo ({{ product.stock }})</span>
+                        </span>
+                        {% endif %}
+                    {% else %}
+                    <button type="button" 
+                            onclick="if(confirm('¿Deseas reactivar este producto para volverlo a vender e inventariar?')) { document.getElementById('form-toggle-status-edit').submit(); }"
+                            class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition active:scale-95 shadow-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span>Reactivar Producto</span>
+                    </button>
+                    {% endif %}
                 </div>
             </div>
 
@@ -510,6 +629,13 @@
                     Cancelar
                 </a>
             </div>
+        </form>
+
+        <!-- Formulario oculto para alternar estado (baja / reactivación) -->
+        <form id="form-toggle-status-edit" action="{% url 'toggle_product_status' product.id %}" method="post" class="hidden">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="{% if product.is_active %}deactivate{% else %}reactivate{% endif %}">
+            <input type="hidden" name="next" value="{% url 'edit_product' product.id %}">
         </form>
     </div>
 
@@ -777,12 +903,14 @@
 
 <!-- Script Alpine de la Calculadora Bidireccional de Rentabilidad -->
 <script>
-function productEditor(initialCost, initialPrice, initialStock, initialComponentsCost) {
+function productEditor(initialCost, initialPrice, initialStock, initialComponentsCost, initialIsService, initialHasComponents) {
     return {
         cost: Number(initialCost) || 0,
         price: Number(initialPrice) || 0,
         stock: Number(initialStock) || 0,
         componentsCost: Number(initialComponentsCost) || 0,
+        isService: Boolean(initialIsService),
+        hasComponents: Boolean(initialHasComponents),
         marginPercent: 30,
         marginType: 'markup', // 'markup' (% s/costo) o 'margin' (% s/venta)
         lastChanged: initialPrice > 0 ? 'price' : 'margin',

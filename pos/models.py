@@ -14,6 +14,7 @@ class Product(models.Model):
     cost_price = models.IntegerField(default=0, help_text="Precio de costo / compra")
     price = models.IntegerField(default=0, help_text="Precio de venta final (PVP)")
     stock = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True, help_text="Indica si el producto está activo para venta e inventario regular")
     is_service = models.BooleanField(default=False, help_text="Indica si es un servicio o producto que consume insumos")
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
     image = models.ImageField(upload_to='products/', null=True, blank=True)
@@ -65,21 +66,21 @@ class Product(models.Model):
     @property
     def cost_valuation(self):
         """Valoración total del stock a costo (los servicios no duplican capital, se mide en sus insumos)"""
-        if self.is_service or (self.has_components and self.stock <= 0):
+        if self.is_service or self.has_components:
             return 0
         return self.effective_cost * self.stock
 
     @property
     def sale_valuation(self):
         """Valoración total del stock a precio de venta"""
-        if self.is_service or (self.has_components and self.stock <= 0):
+        if self.is_service or self.has_components:
             return 0
         return self.price * self.stock
 
     @property
     def profit_valuation(self):
         """Ganancia potencial total sobre el stock actual"""
-        if self.is_service or (self.has_components and self.stock <= 0):
+        if self.is_service or self.has_components:
             return 0
         return self.profit * self.stock
 
@@ -87,45 +88,112 @@ class Product(models.Model):
     def available_service_units(self):
         """
         Calcula cuántos servicios se pueden prestar según las existencias actuales de sus insumos.
-        Si no tiene insumos, devuelve su propio stock.
+        - Si tiene insumos vinculados, la disponibilidad es el mínimo que permiten los insumos.
+        - Si es un servicio puro sin insumos, está siempre disponible (no limitado por stock físico).
+        - Si es un producto físico normal, devuelve su propio stock.
         """
         if not self.has_components:
-            return self.stock
+            return 9999 if self.is_service else self.stock
         availabilities = []
         for comp in self.components.select_related('component_product').all():
             if comp.quantity > 0:
                 availabilities.append(int(comp.component_product.stock // comp.quantity))
         return min(availabilities) if availabilities else 0
 
+    @property
+    def max_available_for_sale(self):
+        """
+        Límite máximo de unidades que se pueden vender en el POS:
+        - Si tiene insumos/componentes vinculados: se limita estrictamente por el stock de sus insumos (available_service_units).
+        - Si es un servicio puro (sin insumos): ilimitado (None).
+        - Si es un producto físico comercial: su stock físico actual (>= 0).
+        """
+        if self.has_components:
+            return max(0, self.available_service_units)
+        if self.is_service:
+            return None
+        return max(0, self.stock)
+
+    def can_sell(self, quantity=1):
+        """
+        Verifica si se pueden vender 'quantity' unidades en el POS:
+        - Si tiene insumos, verifica que cada insumo físico tenga stock suficiente.
+        - Si es un servicio puro, siempre es True.
+        - Si es un producto físico, verifica que self.stock >= quantity.
+        """
+        if not self.is_active:
+            return False, f'El producto "{self.name}" está inactivo o dado de baja.'
+        if self.has_components:
+            for comp in self.components.select_related('component_product').all():
+                needed = int(float(comp.quantity) * quantity)
+                if comp.component_product.stock < needed:
+                    available = int(comp.component_product.stock // comp.quantity) if comp.quantity > 0 else 0
+                    return False, f'Insumos insuficientes de "{comp.component_product.name}". Requieres {needed} unid(s) pero solo quedan {comp.component_product.stock} disponibles en bodega (máximo {available} servicio(s)).'
+            return True, ""
+        if self.is_service:
+            return True, ""
+        if self.stock < quantity:
+            return False, f'Stock insuficiente de "{self.name}". Requieres {quantity} unid(s) pero solo hay {self.stock} en bodega.'
+        return True, ""
+
     def deduct_stock(self, quantity=1):
         """
         Descuenta inventario:
-        - Si tiene insumos vinculados, descuenta de cada insumo (ej: Papel fotográfico).
-        - De lo contrario, descuenta de su stock directo.
+        - Si tiene insumos vinculados, descuenta de cada insumo físico (ej: Papel fotográfico).
+        - Si es un producto físico comercial, descuenta de su stock directo.
+        - Si es un servicio puro (sin insumos físicos), NO descuenta stock directo para evitar números negativos.
         """
         if self.has_components:
             for comp in self.components.select_related('component_product').all():
                 qty_to_deduct = int(float(comp.quantity) * quantity)
                 comp.component_product.stock -= qty_to_deduct
                 comp.component_product.save(update_fields=['stock'])
-        else:
+        elif not self.is_service:
             self.stock -= quantity
             self.save(update_fields=['stock'])
 
     def restore_stock(self, quantity=1):
         """
         Restaura inventario (en caso de anulación o retiro de ítem de venta):
-        - Si tiene insumos vinculados, reincorpora a los insumos.
-        - De lo contrario, restaura a su stock directo.
+        - Si tiene insumos vinculados, reincorpora a los insumos físicos.
+        - Si es un producto físico comercial, restaura a su stock directo.
+        - Si es un servicio puro, no altera stock directo.
         """
         if self.has_components:
             for comp in self.components.select_related('component_product').all():
                 qty_to_restore = int(float(comp.quantity) * quantity)
                 comp.component_product.stock += qty_to_restore
                 comp.component_product.save(update_fields=['stock'])
-        else:
+        elif not self.is_service:
             self.stock += quantity
             self.save(update_fields=['stock'])
+
+    @property
+    def can_be_deactivated(self):
+        """
+        Un producto físico solo se puede dar de baja (desactivar) si está completamente agotado (stock <= 0).
+        Los servicios se pueden dar de baja directamente si ya no se van a ofrecer.
+        """
+        return self.stock <= 0 or self.is_service
+
+    def deactivate(self):
+        """
+        Marca el producto como inactivo si y solo si no tiene inventario disponible.
+        """
+        if not self.can_be_deactivated:
+            raise ValueError(f"No se puede dar de baja un producto con existencias (stock actual: {self.stock}).")
+        self.is_active = False
+        self.save(update_fields=['is_active'])
+
+    def reactivate(self):
+        """
+        Reactiva un producto previamente dado de baja para volver a comercializarlo e inventariarlo.
+        """
+        self.is_active = True
+        self.save(update_fields=['is_active'])
+
+    class Meta:
+        ordering = ['-is_active', 'name']
 
 class ProductComponent(models.Model):
     """

@@ -208,16 +208,59 @@
         </div>
     </div>
 
+    <!-- Tabs de Apartados: Activos (Venta) vs Dados de Baja (Inactivos) vs Todos -->
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-2xl shadow-sm border border-slate-200">
+        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+            <a href="{% url 'inventory' %}?status=active" 
+               class="inline-flex items-center gap-2 px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition whitespace-nowrap {% if current_status == 'active' %}bg-brand-500 text-white shadow-xs{% else %}bg-slate-50 text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200/80{% endif %}">
+                <span>📦 Activos en Venta</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold {% if current_status == 'active' %}bg-white/20 text-white{% else %}bg-slate-200 text-slate-700{% endif %}">
+                    {{ active_count }}
+                </span>
+            </a>
+
+            <a href="{% url 'inventory' %}?status=inactive" 
+               class="inline-flex items-center gap-2 px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition whitespace-nowrap {% if current_status == 'inactive' %}bg-rose-600 text-white shadow-xs{% else %}bg-slate-50 text-slate-600 hover:text-rose-600 hover:bg-rose-50/50 border border-slate-200/80{% endif %}">
+                <span>🚫 Dados de Baja / Inactivos</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold {% if current_status == 'inactive' %}bg-white/20 text-white{% else %}bg-rose-100 text-rose-700{% endif %}">
+                    {{ inactive_count }}
+                </span>
+            </a>
+
+            <a href="{% url 'inventory' %}?status=all" 
+               class="inline-flex items-center gap-2 px-3 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition whitespace-nowrap {% if current_status == 'all' %}bg-slate-800 text-white shadow-xs{% else %}bg-slate-50 text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200/80{% endif %}">
+                <span>📑 Todos (Activos primero)</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold {% if current_status == 'all' %}bg-white/20 text-white{% else %}bg-slate-200 text-slate-700{% endif %}">
+                    {{ all_count }}
+                </span>
+            </a>
+        </div>
+
+        {% if current_status == 'inactive' %}
+        <div class="text-xs text-rose-700 font-bold flex items-center gap-1.5 bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-200/80">
+            <svg class="w-4 h-4 shrink-0 text-rose-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>Productos dados de baja / agotados. Ocultos en el POS para la venta.</span>
+        </div>
+        {% endif %}
+    </div>
+
     <!-- Search Bar -->
     <div class="relative bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex items-center">
+        <input type="hidden" id="inventory-status-param" name="status" value="{{ current_status }}">
         <span class="absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
             <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
             </svg>
         </span>
-        <input type="text" id="inventory-search-input" name="search" placeholder="Buscar productos por nombre o código de barras..."
+        <input type="text" id="inventory-search-input" name="search" 
+            placeholder="{% if current_status == 'inactive' %}Buscar productos dados de baja por nombre o código...{% else %}Buscar productos por nombre o código de barras...{% endif %}"
             class="w-full py-3 sm:py-4 pl-10 sm:pl-12 pr-12 sm:pr-14 rounded-2xl border-none focus:outline-none focus:ring-2 focus:ring-brand-500 text-xs sm:text-base text-slate-800 font-medium placeholder:text-slate-400"
-            hx-get="{% url 'inventory' %}" hx-trigger="keyup changed delay:400ms, search" hx-target="#product-list">
+            hx-get="{% url 'inventory' %}" 
+            hx-include="#inventory-status-param"
+            hx-trigger="keyup changed delay:400ms, search" 
+            hx-target="#product-list">
         <button type="button" 
                 onclick="openBarcodeScanner('inventory-search-input', (code) => { htmx.trigger('#inventory-search-input', 'search'); })"
                 class="absolute right-2 sm:right-3 p-2 rounded-xl text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition active:scale-95 flex items-center gap-1.5"
@@ -690,6 +733,28 @@
                     <span class="text-[10px] text-slate-400 mt-1 block">Distribución de artículos</span>
                 </div>
             </div>
+
+            {% if services_with_stock_count > 0 %}
+            <!-- Alerta y Corrección Rápida de Stock en Servicios -->
+            <div class="mt-4 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div class="flex items-start gap-2.5">
+                    <span class="text-base shrink-0">⚠️</span>
+                    <div>
+                        <span class="font-bold text-amber-900 block">Stock detectado en {{ services_with_stock_count }} servicio(s) o impresiones con receta</span>
+                        <p class="text-amber-700 text-[11px] mt-0.5">
+                            Los servicios se venden según disponibilidad o consumo de insumos sin requerir stock físico en estantes. Puedes normalizar su stock directo a 0 con un solo clic.
+                        </p>
+                    </div>
+                </div>
+                <form action="{% url 'clean_services_stock' %}" method="post" class="shrink-0" onsubmit="return confirm('¿Deseas normalizar a 0 el stock directo de los servicios e impresiones con receta? Tus insumos físicos (papel, tinta, etc.) se mantendrán intactos.');">
+                    {% csrf_token %}
+                    <button type="submit" class="w-full sm:w-auto px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow-xs transition active:scale-95 whitespace-nowrap flex items-center justify-center gap-1.5">
+                        <span>⚡</span>
+                        <span>Normalizar Servicios a 0</span>
+                    </button>
+                </form>
+            </div>
+            {% endif %}
 
             <!-- Top 10 Productos con Mayor Valor en Stock -->
             <div class="mt-6">

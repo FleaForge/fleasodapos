@@ -366,6 +366,13 @@ document.body.addEventListener('itemAdded', function(evt) {
     }
 });
 
+// Escuchar evento cartError para notificar insumos o stock insuficientes
+document.body.addEventListener('cartError', function(evt) {
+    if (evt.detail && evt.detail.message) {
+        showPosNotification(`⚠️ ${evt.detail.message}`, 'warning');
+    }
+});
+
 function openPosCameraScanner() {
     openBarcodeScanner('pos-search-input', (scannedBarcode) => {
         // Enviar al endpoint de escaneo directo para sumar inmediatamente al carrito

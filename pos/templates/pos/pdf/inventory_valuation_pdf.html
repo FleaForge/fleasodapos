@@ -192,9 +192,18 @@
             <tr>
                 <td class="text-center font-mono">{{ forloop.counter }}</td>
                 <td class="font-mono">{{ p.barcode|default:"-" }}</td>
-                <td class="font-bold">{{ p.name }}</td>
+                <td class="font-bold">
+                    {{ p.name }}
+                    {% if p.has_components %}
+                    <span style="color: #6366f1; font-size: 8px; font-weight: normal;">(Receta)</span>
+                    {% elif p.is_service %}
+                    <span style="color: #9333ea; font-size: 8px; font-weight: normal;">(Servicio)</span>
+                    {% endif %}
+                </td>
                 <td class="text-center font-bold font-mono">
-                    {% if p.stock <= 0 %}
+                    {% if p.is_service or p.has_components %}
+                    <span style="color: #6366f1; font-size: 8px;">Servicio</span>
+                    {% elif p.stock <= 0 %}
                     <span style="color: #e11d48;">0 (Agotado)</span>
                     {% elif p.stock <= 5 %}
                     <span style="color: #d97706;">{{ p.stock }}</span>

@@ -111,7 +111,7 @@ class PriceAndProfitabilityTests(TestCase):
         res_edit = self.client.get(reverse('edit_product', args=[p.id]))
         self.assertEqual(res_edit.status_code, 200)
         self.assertContains(res_edit, 'Fijación de Precios y Rentabilidad')
-        self.assertContains(res_edit, 'productEditor(1800, 2500, 8, 0)')
+        self.assertContains(res_edit, 'productEditor(1800, 2500, 8, 0, false, false)')
 
         # Product price history modal view
         res_hist = self.client.get(reverse('product_price_history', args=[p.id]))
@@ -436,6 +436,229 @@ class PriceAndProfitabilityTests(TestCase):
         res_new = self.client.get(reverse('check_barcode'), {'barcode': '1234567890123'})
         self.assertEqual(res_new.status_code, 200)
         self.assertContains(res_new, 'Código de barras disponible')
+
+    def test_product_deactivation_rules_model(self):
+        # Product with stock > 0 cannot be deactivated
+        p = Product.objects.create(name='Pintura Acrílica', barcode='PINT1', cost_price=1000, price=2000, stock=8)
+        self.assertFalse(p.can_be_deactivated)
+        with self.assertRaises(ValueError):
+            p.deactivate()
+        p.refresh_from_db()
+        self.assertTrue(p.is_active)
+
+        # Once stock is 0, it can be deactivated
+        p.stock = 0
+        p.save()
+        self.assertTrue(p.can_be_deactivated)
+        p.deactivate()
+        p.refresh_from_db()
+        self.assertFalse(p.is_active)
+
+        # Can be reactivated
+        p.reactivate()
+        p.refresh_from_db()
+        self.assertTrue(p.is_active)
+
+    def test_toggle_product_status_view_validations(self):
+        p = Product.objects.create(name='Tijeras Escolares', barcode='TIJ1', cost_price=1500, price=2500, stock=4)
+
+        # 1. Attempt to deactivate while having stock (should fail)
+        res = self.client.post(reverse('toggle_product_status', args=[p.id]), {'action': 'deactivate'}, follow=True)
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, 'No se puede dar de baja')
+        self.assertContains(res, 'aún tiene 4 unidades')
+        p.refresh_from_db()
+        self.assertTrue(p.is_active)
+
+        # 2. Set stock to 0 and deactivate (should succeed)
+        p.stock = 0
+        p.save()
+        res = self.client.post(reverse('toggle_product_status', args=[p.id]), {'action': 'deactivate'}, follow=True)
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, 'ha sido dado de baja')
+        p.refresh_from_db()
+        self.assertFalse(p.is_active)
+
+        # 3. Reactivate product
+        res = self.client.post(reverse('toggle_product_status', args=[p.id]), {'action': 'reactivate'}, follow=True)
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, 'ha sido reactivado')
+        p.refresh_from_db()
+        self.assertTrue(p.is_active)
+
+    def test_inventory_tabs_filter_active_and_inactive(self):
+        active_p = Product.objects.create(name='Goma en Barra', barcode='GOM1', cost_price=500, price=1000, stock=10, is_active=True)
+        inactive_p = Product.objects.create(name='Papel Crepé Agotado', barcode='PAP1', cost_price=300, price=600, stock=0, is_active=False)
+
+        # Default / active tab: context contains active_p, not inactive_p
+        res_active = self.client.get(reverse('inventory'), {'status': 'active'})
+        self.assertEqual(res_active.status_code, 200)
+        self.assertIn(active_p, list(res_active.context['products']))
+        self.assertNotIn(inactive_p, list(res_active.context['products']))
+
+        # Inactive tab: context contains inactive_p, not active_p
+        res_inactive = self.client.get(reverse('inventory'), {'status': 'inactive'})
+        self.assertEqual(res_inactive.status_code, 200)
+        self.assertIn(inactive_p, list(res_inactive.context['products']))
+        self.assertNotIn(active_p, list(res_inactive.context['products']))
+
+        # HTMX partial renders
+        res_active_htmx = self.client.get(reverse('inventory'), {'status': 'active'}, headers={'hx-request': 'true'})
+        self.assertContains(res_active_htmx, 'Goma en Barra')
+        self.assertNotContains(res_active_htmx, 'Papel Crepé Agotado')
+
+        res_inactive_htmx = self.client.get(reverse('inventory'), {'status': 'inactive'}, headers={'hx-request': 'true'})
+        self.assertContains(res_inactive_htmx, 'Papel Crepé Agotado')
+        self.assertNotContains(res_inactive_htmx, 'Goma en Barra')
+
+    def test_pos_blocks_selling_and_scanning_inactive_products(self):
+        p_active = Product.objects.create(name='Cuaderno Activo', barcode='ACT123', cost_price=2000, price=3000, stock=10, is_active=True)
+        p_inactive = Product.objects.create(name='Cuaderno Dado de Baja', barcode='INA123', cost_price=2000, price=3000, stock=0, is_active=False)
+
+        # POS search only returns active products
+        res_search = self.client.get(reverse('search_products'), {'search': 'Cuaderno'})
+        self.assertEqual(res_search.status_code, 200)
+        self.assertContains(res_search, 'Cuaderno Activo')
+        self.assertNotContains(res_search, 'Cuaderno Dado de Baja')
+
+        # Direct camera scan rejects inactive product
+        res_scan = self.client.post(reverse('scan_and_add_to_cart'), {'barcode': 'INA123'})
+        self.assertEqual(res_scan.status_code, 400)
+        self.assertIn('dado de baja / inactivo', res_scan.json()['message'])
+
+        # Add to cart directly rejects inactive product
+        res_add = self.client.post(reverse('add_to_cart'), {'product_id': p_inactive.id, 'quantity': 1})
+        self.assertEqual(res_add.status_code, 400)
+
+    def test_add_stock_to_inactive_product_reactivates_it(self):
+        p = Product.objects.create(name='Marcador Borrable', barcode='MAR1', cost_price=1000, price=1800, stock=0, is_active=False)
+        res = self.client.post(reverse('add_stock', args=[p.id]), {'quantity': '10'}, follow=True)
+        self.assertEqual(res.status_code, 200)
+        p.refresh_from_db()
+        self.assertEqual(p.stock, 10)
+        self.assertTrue(p.is_active) # Reactivated automatically
+
+class ServicesAndInventoryValuationTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='admin_services', password='password123')
+        self.client.login(username='admin_services', password='password123')
+
+    def test_service_with_dummy_stock_does_not_inflate_valuation(self):
+        # Even if someone assigns 9999 units to a service, valuation MUST be 0
+        service = Product.objects.create(name='HISTORIAL LABORAL', price=5000, cost_price=0, stock=9999, is_service=True)
+        self.assertEqual(service.cost_valuation, 0)
+        self.assertEqual(service.sale_valuation, 0)
+        self.assertEqual(service.profit_valuation, 0)
+
+    def test_top_valued_products_modal_excludes_services(self):
+        # Create a real physical product
+        physical = Product.objects.create(name='CARPETA 4 ALAS', cost_price=2000, price=3500, stock=999, is_service=False)
+        # Create a service with 9999 dummy stock (like in the user screenshot)
+        service = Product.objects.create(name='Hoja de vida', cost_price=0, price=3000, stock=9999, is_service=True)
+
+        res = self.client.get(reverse('inventory'))
+        self.assertEqual(res.status_code, 200)
+        top_list = res.context['top_valued_products']
+
+        # CARPETA 4 ALAS should be in top valued
+        self.assertIn(physical, top_list)
+        # Hoja de vida must NOT be in top valued
+        self.assertNotIn(service, top_list)
+
+        # total_stock_units in inventory context must only count physical products (999, not 999 + 9999)
+        self.assertEqual(res.context['total_stock_units'], 999)
+
+    def test_pure_service_sale_does_not_become_negative_stock(self):
+        service = Product.objects.create(name='Descarga Certificado', cost_price=0, price=2000, stock=0, is_service=True)
+        
+        # Deduct stock on checkout
+        service.deduct_stock(1)
+        service.refresh_from_db()
+        self.assertEqual(service.stock, 0) # Remains 0, does not become -1
+
+        # Restore stock on annulment
+        service.restore_stock(1)
+        service.refresh_from_db()
+        self.assertEqual(service.stock, 0) # Remains 0
+
+    def test_clean_services_stock_view_resets_stock_to_zero(self):
+        s1 = Product.objects.create(name='COPIAS COLOR', price=300, stock=9813, is_service=True)
+        s2 = Product.objects.create(name='COLOR IMPRESIÓN', price=300, stock=9946, is_service=True)
+        p_real = Product.objects.create(name='Cuaderno 100H', price=3500, stock=50, is_service=False)
+
+        res = self.client.post(reverse('clean_services_stock'), follow=True)
+        self.assertEqual(res.status_code, 200)
+
+        s1.refresh_from_db()
+        s2.refresh_from_db()
+        p_real.refresh_from_db()
+
+        self.assertEqual(s1.stock, 0)
+        self.assertEqual(s2.stock, 0)
+        self.assertEqual(p_real.stock, 50) # Physical stock untouched
+
+    def test_service_with_components_cannot_exceed_component_stock_in_cart(self):
+        # Insumo real: Opalina Laser con stock = 5
+        opalina = Product.objects.create(name='OPALINA LASER', cost_price=260, price=500, stock=5)
+        # Servicio de impresión que consume 1 opalina
+        impresion = Product.objects.create(name='OPALINA IMPRESIÓN COLOR', cost_price=0, price=800, stock=0, is_service=True)
+        ProductComponent.objects.create(parent_product=impresion, component_product=opalina, quantity=1)
+
+        self.assertEqual(impresion.available_service_units, 5)
+
+        # Intento de agregar 6 unidades al carrito (mayor que las 5 disponibles de insumo)
+        res_fail = self.client.post(reverse('add_to_cart'), {'product_id': impresion.id, 'quantity': 6})
+        self.assertEqual(res_fail.status_code, 200)
+        self.assertIn('cartError', res_fail.headers.get('HX-Trigger', ''))
+        # El carrito debe seguir vacío
+        self.assertEqual(self.client.session.get('cart', {}), {})
+
+        # Agregar 5 unidades (justo el stock disponible) -> DEBE PERMITIRSE
+        res_ok = self.client.post(reverse('add_to_cart'), {'product_id': impresion.id, 'quantity': 5})
+        self.assertEqual(res_ok.status_code, 200)
+        self.assertIn('itemAdded', res_ok.headers.get('HX-Trigger', ''))
+        self.assertEqual(self.client.session['cart'][str(impresion.id)]['quantity'], 5)
+
+        # Intento de incrementar 1 unidad más en el carrito (total 6 > 5)
+        res_inc_fail = self.client.post(reverse('update_cart_item'), {'product_id': impresion.id, 'action': 'increment'})
+        self.assertEqual(res_inc_fail.status_code, 200)
+        self.assertIn('cartError', res_inc_fail.headers.get('HX-Trigger', ''))
+        # La cantidad se mantiene en 5
+        self.assertEqual(self.client.session['cart'][str(impresion.id)]['quantity'], 5)
+
+    def test_checkout_blocks_sale_if_component_stock_exhausted(self):
+        client = Client.objects.create(name='Cliente Impresiones Test', phone='3000000000')
+        papel = Product.objects.create(name='Papel Foto Especial', cost_price=300, price=600, stock=2)
+        servicio = Product.objects.create(name='Foto 10x15 Especial', cost_price=0, price=1000, stock=0, is_service=True)
+        ProductComponent.objects.create(parent_product=servicio, component_product=papel, quantity=1)
+
+        # Carrito con 3 unidades cuando solo hay 2 de papel
+        session = self.client.session
+        session['cart'] = {
+            str(servicio.id): {
+                'id': servicio.id,
+                'name': servicio.name,
+                'price': servicio.price,
+                'quantity': 3
+            }
+        }
+        session.save()
+
+        # Checkout debe fallar por insumos insuficientes
+        res = self.client.post(reverse('checkout'), {
+            'client_id': client.id,
+            'payment_method': 'CASH'
+        }, follow=True)
+
+        self.assertEqual(res.status_code, 200)
+        # La venta no debe haberse creado
+        self.assertEqual(Sale.objects.filter(client=client).count(), 0)
+        # El stock del insumo debe seguir intacto en 2 (no en -1)
+        papel.refresh_from_db()
+        self.assertEqual(papel.stock, 2)
+
+
+
 
 
 

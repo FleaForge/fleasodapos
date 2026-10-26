@@ -1,13 +1,17 @@
 {% load humanize %}
 {% for product in products %}
-<div class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/90 flex flex-col justify-between hover:shadow-md transition-shadow overflow-hidden">
+<div class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border {% if not product.is_active %}border-rose-300/80 bg-rose-50/15 ring-1 ring-rose-200/50{% else %}border-slate-200/90{% endif %} flex flex-col justify-between hover:shadow-md transition-shadow overflow-hidden">
     <div>
         <div class="flex items-start justify-between gap-2 mb-1.5">
             <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200 font-mono">
                 {% if product.barcode %}{{ product.barcode }}{% else %}#{{ product.id }}{% endif %}
             </span>
             <div class="flex items-center gap-1 flex-wrap justify-end">
-                {% if product.has_components %}
+                {% if not product.is_active %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-black border bg-rose-100 text-rose-800 border-rose-300">
+                    🚫 Dado de Baja
+                </span>
+                {% elif product.has_components %}
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold border bg-indigo-50 text-indigo-700 border-indigo-200 font-mono">
                     🧪 {{ product.available_service_units }} disp. (insumos)
                 </span>
@@ -32,7 +36,9 @@
             </div>
             {% endif %}
             <div class="min-w-0 flex-1">
-                <h3 class="font-black text-base sm:text-lg text-slate-800 leading-snug truncate" title="{{ product.name }}">{{ product.name }}</h3>
+                <h3 class="font-black text-base sm:text-lg text-slate-800 leading-snug truncate" title="{{ product.name }}">
+                    {{ product.name }}
+                </h3>
             </div>
         </div>
     </div>
@@ -89,18 +95,52 @@
     </div>
 
     <!-- Actions Footer -->
-    <div class="mt-4 pt-3 border-t border-slate-100 space-y-2.5">
-        {% if product.has_components or product.is_service %}
+    <div class="mt-4 pt-3 border-t border-slate-100 space-y-2">
+        {% if not product.is_active %}
+        <!-- Producto Inactivo / Dado de Baja: Botón para Reactivar -->
+        <form action="{% url 'toggle_product_status' product.id %}" method="post" 
+              onsubmit="return confirm('¿Deseas reactivar al producto \'{{ product.name|escapejs }}\'? Volverá a aparecer en el inventario activo y disponible para la venta en el POS.');">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="reactivate">
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button type="submit"
+                class="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition shadow-2xs active:scale-95"
+                title="Reactivar producto y devolver al catálogo activo de ventas">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span>Reactivar Producto</span>
+            </button>
+        </form>
+        {% elif product.has_components or product.is_service %}
         <a href="{% url 'edit_product' product.id %}" 
            class="flex items-center justify-center gap-1.5 w-full text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 py-2 rounded-xl transition border border-indigo-200 shadow-2xs">
             <span>🧪</span>
             <span>Gestionar Insumos / Receta</span>
         </a>
+        {% if product.stock <= 0 %}
+        <!-- Botón Dar de Baja (Agotado) -->
+        <form action="{% url 'toggle_product_status' product.id %}" method="post" 
+              onsubmit="return confirm('¿Seguro que deseas dar de baja este producto agotado (\'{{ product.name|escapejs }}\')? Se trasladará al apartado de Dados de Baja y se ocultará de la venta.');">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="deactivate">
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button type="submit"
+                class="w-full flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition border border-rose-200/80 active:scale-95 shadow-2xs"
+                title="Producto sin existencias: Dar de baja y trasladar a Inactivos">
+                <svg class="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                <span>Dar de Baja (Agotado)</span>
+            </button>
+        </form>
+        {% endif %}
         {% else %}
         <!-- Add Stock Full Width Input Group -->
         <form action="{% url 'add_stock' product.id %}" method="post" 
               class="flex items-stretch rounded-xl border border-slate-200 bg-slate-50/80 overflow-hidden focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/15 transition shadow-2xs">
             {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
             <span class="inline-flex items-center px-2.5 bg-slate-100 text-slate-500 text-xs font-bold border-r border-slate-200 select-none">
                 + Stock
             </span>
@@ -113,6 +153,24 @@
                 <span>+</span>
             </button>
         </form>
+
+        {% if product.stock <= 0 %}
+        <!-- Botón Dar de Baja (Visible únicamente si está totalmente agotado) -->
+        <form action="{% url 'toggle_product_status' product.id %}" method="post" 
+              onsubmit="return confirm('¿Seguro que deseas dar de baja este producto agotado (\'{{ product.name|escapejs }}\')? Se trasladará al apartado de Dados de Baja y se ocultará de la venta.');">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="deactivate">
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button type="submit"
+                class="w-full flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition border border-rose-200/80 active:scale-95 shadow-2xs"
+                title="Producto sin existencias: Dar de baja y trasladar a Inactivos">
+                <svg class="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                <span>Dar de Baja (Agotado)</span>
+            </button>
+        </form>
+        {% endif %}
         {% endif %}
 
         <!-- Navigation Buttons: Editar & Historial (50% / 50%) -->
@@ -145,7 +203,12 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
         </svg>
     </div>
+    {% if current_status == 'inactive' %}
+    <h3 class="text-base font-bold text-slate-700">No hay productos dados de baja</h3>
+    <p class="text-xs text-slate-400 mt-1">Los productos sin inventario que decidas dar de baja se mostrarán en este apartado.</p>
+    {% else %}
     <h3 class="text-base font-bold text-slate-700">No se encontraron productos</h3>
     <p class="text-xs text-slate-400 mt-1">Prueba con otro término de búsqueda o crea un nuevo producto.</p>
+    {% endif %}
 </div>
 {% endfor %}

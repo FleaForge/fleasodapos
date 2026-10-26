@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from django.urls import reverse
 from django.db import IntegrityError
 from django.db.models import Sum, Q, F, Count
 from django.utils import timezone
@@ -59,14 +60,16 @@ def dashboard(request):
     total_payments = Payment.objects.filter(is_annulled=False).aggregate(Sum('amount'))['amount__sum'] or 0
     debt_pending = max(0, total_credit_sales - total_payments)
     
-    # 5. Inventario & Clientes
-    total_products = Product.objects.count()
-    total_stock_units = Product.objects.aggregate(Sum('stock'))['stock__sum'] or 0
-    all_products = list(Product.objects.all())
+    # 5. Inventario & Clientes (Artículos activos en operación)
+    active_products_qs = Product.objects.filter(is_active=True)
+    total_products = active_products_qs.count()
+    physical_products_qs = active_products_qs.filter(is_service=False)
+    total_stock_units = physical_products_qs.aggregate(Sum('stock'))['stock__sum'] or 0
+    all_products = list(active_products_qs)
     total_inventory_valuation = sum(p.sale_valuation for p in all_products)
     total_inventory_cost = sum(p.cost_valuation for p in all_products)
-    low_stock_products = Product.objects.filter(stock__lte=5).order_by('stock')[:5]
-    low_stock_count = Product.objects.filter(stock__lte=5).count()
+    low_stock_products = physical_products_qs.filter(stock__lte=5).order_by('stock')[:5]
+    low_stock_count = physical_products_qs.filter(stock__lte=5).count()
     total_clients = Client.objects.count()
     
     # 6. Tendencia de Ventas (Últimos 14 Días comerciales)
@@ -133,35 +136,66 @@ def dashboard(request):
 
 @login_required
 def inventory(request):
-    products = Product.objects.all().order_by('-id')
+    status_filter = request.GET.get('status', 'active')
+    
+    all_qs = Product.objects.all()
+    active_count = all_qs.filter(is_active=True).count()
+    inactive_count = all_qs.filter(is_active=False).count()
+    all_count = all_qs.count()
+
+    if status_filter == 'inactive':
+        products = all_qs.filter(is_active=False).order_by('-id')
+    elif status_filter == 'all':
+        products = all_qs.order_by('-is_active', '-id')
+    else:
+        status_filter = 'active'
+        products = all_qs.filter(is_active=True).order_by('-id')
+
     if request.htmx:
-        query = request.GET.get('search')
+        query = request.GET.get('search', '').strip()
         if query:
             products = products.filter(Q(name__icontains=query) | Q(barcode__icontains=query))
-        return render(request, 'pos/partials/product_list.html', {'products': products})
+        return render(request, 'pos/partials/product_list.html', {
+            'products': products,
+            'current_status': status_filter
+        })
 
-    # Resumen de inventario y rentabilidad
-    total_products = products.count()
-    low_stock_count = products.filter(stock__lte=5).count()
-    out_of_stock_count = products.filter(stock__lte=0).count()
-    in_stock_count = products.filter(stock__gt=5).count()
-    total_stock_units = products.aggregate(Sum('stock'))['stock__sum'] or 0
+    # Resumen de inventario y rentabilidad (enfocado en artículos activos)
+    active_products = all_qs.filter(is_active=True)
+    total_products = active_count
+    
+    # Métricas físicas de stock (excluyen servicios para no distorsionar conteos de bodega)
+    physical_products = active_products.filter(is_service=False)
+    low_stock_count = physical_products.filter(stock__gt=0, stock__lte=5).count()
+    out_of_stock_count = physical_products.filter(stock__lte=0).count()
+    in_stock_count = physical_products.filter(stock__gt=5).count()
+    total_stock_units = physical_products.aggregate(Sum('stock'))['stock__sum'] or 0
 
-    total_cost_valuation = sum(p.cost_valuation for p in products)
-    total_sale_valuation = sum(p.sale_valuation for p in products)
+    total_cost_valuation = sum(p.cost_valuation for p in active_products)
+    total_sale_valuation = sum(p.sale_valuation for p in active_products)
     total_potential_profit = total_sale_valuation - total_cost_valuation
     avg_markup = round((total_potential_profit / total_cost_valuation * 100), 1) if total_cost_valuation > 0 else 0
     avg_margin = round((total_potential_profit / total_sale_valuation * 100), 1) if total_sale_valuation > 0 else 0
 
-    # Top 10 productos con mayor valor comercial en bodega
-    top_valued_products = sorted([p for p in products if p.stock > 0], key=lambda x: x.sale_valuation, reverse=True)[:10]
+    # Top 10 productos con mayor valor comercial en bodega (Capital físico real, excluye servicios)
+    top_valued_products = sorted(
+        [p for p in active_products if p.sale_valuation > 0 and not p.is_service and not p.has_components],
+        key=lambda x: x.sale_valuation,
+        reverse=True
+    )[:10]
     for p in top_valued_products:
         p.valuation_share = round((p.sale_valuation / total_sale_valuation * 100), 1) if total_sale_valuation > 0 else 0.0
+
+    services_with_stock_count = active_products.filter(Q(is_service=True) | Q(components__isnull=False), stock__gt=0).distinct().count()
 
     recent_price_changes = ProductPriceHistory.objects.select_related('product', 'user').order_by('-date')[:6]
 
     context = {
         'products': products,
+        'current_status': status_filter,
+        'active_count': active_count,
+        'inactive_count': inactive_count,
+        'all_count': all_count,
         'total_products': total_products,
         'total_stock_units': total_stock_units,
         'low_stock_count': low_stock_count,
@@ -173,6 +207,7 @@ def inventory(request):
         'avg_markup': avg_markup,
         'avg_margin': avg_margin,
         'top_valued_products': top_valued_products,
+        'services_with_stock_count': services_with_stock_count,
         'recent_price_changes': recent_price_changes,
     }
     return render(request, 'pos/inventory.html', context)
@@ -600,7 +635,9 @@ def pos(request):
 def search_products(request):
     query = request.GET.get('search', '').strip()
     if query:
-        products = Product.objects.filter(Q(name__icontains=query) | Q(barcode__icontains=query))
+        products = Product.objects.filter(is_active=True).filter(
+            Q(name__icontains=query) | Q(barcode__icontains=query)
+        ).order_by('name')
     else:
         products = []
     return render(request, 'pos/partials/pos_product_search.html', {'products': products})
@@ -628,11 +665,26 @@ def scan_and_add_to_cart(request):
             'message': f'Producto con código "{barcode}" no encontrado en inventario.'
         }, status=404)
         
+    if not product.is_active:
+        return JsonResponse({
+            'success': False,
+            'message': f'El producto "{product.name}" está dado de baja / inactivo. No se puede vender.'
+        }, status=400)
+        
     cart = request.session.get('cart', {})
     product_id_str = str(product.id)
+    current_qty = cart.get(product_id_str, {}).get('quantity', 0)
+    target_qty = current_qty + 1
+
+    can_sell, reason = product.can_sell(target_qty)
+    if not can_sell:
+        return JsonResponse({
+            'success': False,
+            'message': reason
+        }, status=400)
     
     if product_id_str in cart:
-        cart[product_id_str]['quantity'] += 1
+        cart[product_id_str]['quantity'] = target_qty
     else:
         cart[product_id_str] = {
             'id': product.id,
@@ -672,17 +724,38 @@ def add_to_cart(request):
     except ValueError:
         quantity_add = 1
 
+    if quantity_add < 1:
+        quantity_add = 1
+
     product = get_object_or_404(Product, id=product_id)
+    if not product.is_active:
+        return HttpResponse('El producto está dado de baja / inactivo y no se puede vender.', status=400)
+        
     product_id_str = str(product_id) # JSON keys are strings
+    current_qty = cart.get(product_id_str, {}).get('quantity', 0)
+    target_qty = current_qty + quantity_add
+
+    # Validar disponibilidad real de insumos o stock físico
+    can_sell, reason = product.can_sell(target_qty)
+    if not can_sell:
+        cart_items, cart_total = get_cart_data(request.session)
+        response = render(request, 'pos/partials/cart_items.html', {'cart_items': cart_items, 'cart_total': cart_total})
+        import json
+        response['HX-Trigger'] = json.dumps({
+            'cartError': {
+                'message': reason
+            }
+        })
+        return response
     
     if product_id_str in cart:
-        cart[product_id_str]['quantity'] += quantity_add
+        cart[product_id_str]['quantity'] = target_qty
     else:
         cart[product_id_str] = {
             'id': product.id,
             'name': product.name,
             'price': product.price,
-            'quantity': quantity_add,
+            'quantity': target_qty,
         }
     
     request.session['cart'] = cart
@@ -709,6 +782,15 @@ def update_cart_item(request):
     
     if product_id_str and product_id_str in cart:
         if action == 'increment':
+            product = Product.objects.filter(id=product_id).first()
+            if product:
+                can_sell, reason = product.can_sell(cart[product_id_str]['quantity'] + 1)
+                if not can_sell:
+                    cart_items, cart_total = get_cart_data(request.session)
+                    response = render(request, 'pos/partials/cart_items.html', {'cart_items': cart_items, 'cart_total': cart_total})
+                    import json
+                    response['HX-Trigger'] = json.dumps({'cartError': {'message': reason}})
+                    return response
             cart[product_id_str]['quantity'] += 1
         elif action == 'decrement':
             cart[product_id_str]['quantity'] -= 1
@@ -757,6 +839,14 @@ def checkout(request):
                 sale_date = timezone.make_aware(dt)
             except (ValueError, TypeError):
                 pass
+
+        # Validar disponibilidad real de stock e insumos para todos los ítems del carrito antes de facturar
+        for item in cart.values():
+            product = get_object_or_404(Product, id=item['id'])
+            can_sell, reason = product.can_sell(item['quantity'])
+            if not can_sell:
+                messages.error(request, f'No se pudo completar la venta: {reason}')
+                return redirect('pos')
         
         sale = Sale.objects.create(
             client=client,
@@ -847,6 +937,9 @@ def add_product(request):
         try:
             stock = int(request.POST.get('stock') or 0)
         except (ValueError, TypeError):
+            stock = 0
+            
+        if is_service:
             stock = 0
             
         image = request.FILES.get('image')
@@ -1272,9 +1365,10 @@ def client_statement_pdf(request, client_id):
 
 @login_required
 def inventory_valuation_pdf(request):
-    products = Product.objects.all().order_by('name')
+    products = Product.objects.filter(is_active=True).order_by('name')
     total_products = products.count()
-    total_stock_units = products.aggregate(Sum('stock'))['stock__sum'] or 0
+    physical_products = products.filter(is_service=False)
+    total_stock_units = physical_products.aggregate(Sum('stock'))['stock__sum'] or 0
     total_cost_valuation = sum(p.cost_valuation for p in products)
     total_sale_valuation = sum(p.sale_valuation for p in products)
     total_potential_profit = total_sale_valuation - total_cost_valuation
@@ -1388,7 +1482,21 @@ def edit_product(request, product_id):
                     pass
             product.image = None
 
-        product.is_service = request.POST.get('is_service') in ('true', 'on', '1')
+        product.is_service = request.POST.get('is_service') in ('true', 'on', '1') or product.has_components
+
+        # Manejo de estado activo / dado de baja
+        is_active_val = request.POST.get('is_active')
+        if is_active_val is not None:
+            wants_active = is_active_val in ('true', 'on', '1', 'True')
+            if not wants_active and product.stock > 0:
+                messages.error(
+                    request,
+                    f'No se puede dar de baja "{product.name}": aún tiene {product.stock} unidades en inventario. '
+                    f'El producto debe estar agotado (stock = 0) para marcarlo como inactivo.'
+                )
+                return redirect('edit_product', product_id=product.id)
+            product.is_active = wants_active
+
         try:
             product.save()
         except IntegrityError:
@@ -1423,7 +1531,7 @@ def edit_product(request, product_id):
         
     price_history = product.price_history.select_related('user').order_by('-date')
     components = product.components.select_related('component_product').all()
-    available_supplies = Product.objects.exclude(id=product.id).order_by('name')
+    available_supplies = Product.objects.filter(is_active=True).exclude(id=product.id).order_by('name')
     return render(request, 'pos/edit_product.html', {
         'product': product,
         'price_history': price_history,
@@ -1454,7 +1562,13 @@ def add_product_component(request, product_id):
                     if not created:
                         comp.quantity += quantity
                         comp.save(update_fields=['quantity'])
-                    messages.success(request, f'Insumo "{component_product.name}" agregado a la receta correctamente.')
+                    
+                    # Al vincular insumos, el producto pasa automáticamente a ser un servicio/preparación
+                    if not product.is_service:
+                        product.is_service = True
+                        product.save(update_fields=['is_service'])
+
+                    messages.success(request, f'Insumo "{component_product.name}" agregado a la receta correctamente. Su capacidad de venta en POS ahora se calcula según las existencias de este insumo.')
             except Product.DoesNotExist:
                 messages.error(request, 'El insumo seleccionado no existe.')
     return redirect('edit_product', product_id=product.id)
@@ -1505,13 +1619,62 @@ def add_stock(request, product_id):
             quantity = int(request.POST.get('quantity'))
             if quantity > 0:
                 product.stock += quantity
-                product.save()
-                messages.success(request, f'Se agregaron {quantity} unidades a {product.name}')
+                was_inactive = not product.is_active
+                if was_inactive:
+                    product.is_active = True
+                    product.save()
+                    messages.success(
+                        request, 
+                        f'Se agregaron {quantity} unidades a "{product.name}" y se reactivó automáticamente en el inventario.'
+                    )
+                else:
+                    product.save()
+                    messages.success(request, f'Se agregaron {quantity} unidades a {product.name}')
             else:
                  messages.error(request, 'La cantidad debe ser mayor a 0')
         except ValueError:
             messages.error(request, 'Cantidad inválida')
             
+    next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('inventory')
+    return redirect(next_url)
+
+@login_required
+def toggle_product_status(request, product_id):
+    """
+    Da de baja un producto agotado (is_active=False) o lo reactiva (is_active=True).
+    Condición estricta: Para marcarlo como inactivo / darlo de baja, debe estar SIN inventario (stock <= 0).
+    """
+    product = get_object_or_404(Product, id=product_id)
+    if request.method == 'POST':
+        action = request.POST.get('action') # 'deactivate', 'reactivate', o toggle automático
+        should_deactivate = (action == 'deactivate') or (action is None and product.is_active)
+        
+        if should_deactivate:
+            if not product.can_be_deactivated:
+                messages.error(
+                    request,
+                    f'No se puede dar de baja "{product.name}": aún tiene {product.stock} unidades en inventario. '
+                    f'El producto debe estar totalmente agotado (stock = 0) para poder darlo de baja.'
+                )
+            else:
+                try:
+                    product.deactivate()
+                    messages.warning(
+                        request,
+                        f'El producto "{product.name}" ha sido dado de baja y trasladado al apartado de Inactivos.'
+                    )
+                except ValueError as e:
+                    messages.error(request, str(e))
+        else:
+            product.reactivate()
+            messages.success(
+                request,
+                f'El producto "{product.name}" ha sido reactivado y devuelto al inventario activo para venta.'
+            )
+            
+        next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('inventory')
+        return redirect(next_url)
+        
     return redirect('inventory')
 
 @login_required
@@ -1564,7 +1727,7 @@ def search_products_for_sale(request, sale_id):
     sale = get_object_or_404(Sale, id=sale_id)
     
     if query:
-        products = Product.objects.filter(name__icontains=query)[:10]
+        products = Product.objects.filter(is_active=True, name__icontains=query).order_by('name')[:10]
     else:
         products = []
     
@@ -1581,6 +1744,8 @@ def add_product_to_sale(request, sale_id):
         sale = get_object_or_404(Sale, id=sale_id)
         product_id = request.POST.get('product_id')
         product = get_object_or_404(Product, id=product_id)
+        if not product.is_active:
+            return HttpResponse('El producto está dado de baja / inactivo y no se puede vender.', status=400)
         
         # Check if product already exists in sale
         existing_item = sale.items.filter(product=product).first()
@@ -1683,3 +1848,19 @@ def annul_sale(request, sale_id):
     if next_url:
         return redirect(next_url)
     return redirect('invoice_detail', sale_id=sale.id)
+
+@login_required
+def clean_services_stock(request):
+    """
+    Normaliza a 0 el stock directo de todos los servicios o productos con receta/insumos vinculados.
+    Esto elimina de golpe cualquier stock ficticio remanente (ej. 9999 o 10000) introducido previamente.
+    """
+    if request.method == 'POST':
+        services_to_fix = Product.objects.filter(Q(is_service=True) | Q(components__isnull=False), stock__gt=0)
+        count = services_to_fix.count()
+        services_to_fix.update(stock=0)
+        messages.success(
+            request, 
+            f'Se normalizó a 0 el stock en {count} servicio(s) e impresiones con receta. La valoración de inventario ahora refleja con total exactitud tus activos físicos en bodega.'
+        )
+    return redirect('inventory')

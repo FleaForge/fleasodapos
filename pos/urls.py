@@ -43,11 +43,13 @@ urlpatterns = [
 
     path('inventory/edit/<int:product_id>/', views.edit_product, name='edit_product'),
     path('inventory/add-stock/<int:product_id>/', views.add_stock, name='add_stock'),
+    path('inventory/toggle-status/<int:product_id>/', views.toggle_product_status, name='toggle_product_status'),
     path('inventory/product/<int:product_id>/price-history/', views.product_price_history, name='product_price_history'),
     path('inventory/price-history/', views.global_price_history, name='global_price_history'),
     path('inventory/check-barcode/', views.check_barcode, name='check_barcode'),
     path('inventory/product/<int:product_id>/components/add/', views.add_product_component, name='add_product_component'),
     path('inventory/component/<int:component_id>/delete/', views.delete_product_component, name='delete_product_component'),
+    path('inventory/clean-services-stock/', views.clean_services_stock, name='clean_services_stock'),
     path('clients/edit/<int:client_id>/', views.edit_client, name='edit_client'),
     path('invoice/edit/<int:sale_id>/', views.edit_sale, name='edit_sale'),
     path('invoice/<int:sale_id>/search-products/', views.search_products_for_sale, name='search_products_for_sale'),

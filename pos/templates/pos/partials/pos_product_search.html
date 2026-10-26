@@ -1,6 +1,6 @@
 {% load humanize %}
 {% for product in products %}
-<div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 hover:border-brand-500 transition relative group flex flex-col justify-between active:scale-[0.99]">
+<div class="bg-white p-3 rounded-2xl shadow-sm border {% if product.has_components and product.available_service_units <= 0 or not product.has_components and not product.is_service and product.stock <= 0 %}border-slate-200 opacity-60 bg-slate-50/50{% else %}border-slate-200 hover:border-brand-500 active:scale-[0.99]{% endif %} transition relative group flex flex-col justify-between">
 
     <div class="flex gap-2.5 items-start">
         {% if product.image %}
@@ -11,11 +11,62 @@
         </div>
         {% endif %}
 
+        {% if product.has_components and product.available_service_units <= 0 %}
+        <!-- Insumos Agotados: Bloquear venta -->
+        <div class="truncate pr-1 flex-1 cursor-not-allowed" title="Insumos agotados para este servicio">
+            <div class="text-sm font-bold text-slate-600 truncate leading-snug">{{ product.name }}</div>
+            <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                <span class="text-xs text-slate-400 font-mono">{% if product.barcode %}{{ product.barcode }}{% else %}#{{ product.id }}{% endif %}</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200">
+                    🧪 Insumos Agotados (0 disp.)
+                </span>
+            </div>
+            <div class="font-bold text-slate-400 text-base mt-1 font-mono">${{ product.price|intcomma }}</div>
+        </div>
+        <div class="flex flex-col items-end z-10 shrink-0">
+            <span class="px-2 py-1 bg-slate-100 text-slate-400 text-[11px] font-bold rounded-lg border border-slate-200 select-none">
+                Sin Insumos
+            </span>
+        </div>
+        {% elif not product.has_components and not product.is_service and product.stock <= 0 %}
+        <!-- Producto Físico Agotado: Bloquear venta -->
+        <div class="truncate pr-1 flex-1 cursor-not-allowed" title="Producto físico agotado">
+            <div class="text-sm font-bold text-slate-600 truncate leading-snug">{{ product.name }}</div>
+            <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                <span class="text-xs text-slate-400 font-mono">{% if product.barcode %}{{ product.barcode }}{% else %}#{{ product.id }}{% endif %}</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200">
+                    Agotado (0 disp.)
+                </span>
+            </div>
+            <div class="font-bold text-slate-400 text-base mt-1 font-mono">${{ product.price|intcomma }}</div>
+        </div>
+        <div class="flex flex-col items-end z-10 shrink-0">
+            <span class="px-2 py-1 bg-slate-100 text-slate-400 text-[11px] font-bold rounded-lg border border-slate-200 select-none">
+                Agotado
+            </span>
+        </div>
+        {% else %}
+        <!-- Disponible para vender (Servicio con insumos disp, Servicio puro o Producto con stock) -->
         <div class="truncate pr-1 cursor-pointer flex-1" hx-post="{% url 'add_to_cart' %}"
             hx-vals='{"product_id": "{{ product.id }}", "quantity": 1 }' hx-target="#cart-items"
             title="Tocar para agregar 1 al carrito">
             <div class="text-sm font-bold text-slate-800 truncate leading-snug hover:text-brand-600 transition">{{ product.name }}</div>
-            <div class="text-xs text-slate-400 font-mono mt-0.5">{% if product.barcode %}{{ product.barcode }}{% else %}#{{ product.id }}{% endif %}</div>
+            <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                <span class="text-xs text-slate-400 font-mono">{% if product.barcode %}{{ product.barcode }}{% else %}#{{ product.id }}{% endif %}</span>
+                {% if product.has_components %}
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono">
+                    🧪 {{ product.available_service_units }} disp. (insumos)
+                </span>
+                {% elif product.is_service %}
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                    ⚡ Servicio
+                </span>
+                {% else %}
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border font-mono {% if product.stock <= 5 %}bg-amber-50 text-amber-700 border-amber-200{% else %}bg-slate-100 text-slate-600 border-slate-200{% endif %}">
+                    Stock: {{ product.stock }}
+                </span>
+                {% endif %}
+            </div>
             <div class="font-black text-brand-600 text-base mt-1 font-mono">${{ product.price|intcomma }}</div>
         </div>
 
@@ -23,7 +74,13 @@
         <form hx-post="{% url 'add_to_cart' %}" hx-target="#cart-items"
             class="flex flex-col items-end z-10 shrink-0" onclick="event.stopPropagation()">
             <input type="hidden" name="product_id" value="{{ product.id }}">
-            <input type="number" min="1" value="1" name="quantity"
+            <input type="number" min="1" 
+                {% if product.has_components %}
+                max="{{ product.available_service_units }}"
+                {% elif not product.is_service %}
+                max="{{ product.stock }}"
+                {% endif %}
+                value="1" name="quantity"
                 class="w-12 text-center text-xs font-bold border border-slate-300 rounded-lg p-1 mb-1 font-mono focus:border-brand-500 outline-none">
             <button type="submit" 
                 class="bg-brand-500 hover:bg-brand-400 text-white text-xs px-2.5 py-1.5 rounded-lg font-bold transition active:scale-95 shadow-2xs flex items-center gap-1"
@@ -32,6 +89,7 @@
                 <span>Add</span>
             </button>
         </form>
+        {% endif %}
     </div>
 </div>
 {% empty %}
