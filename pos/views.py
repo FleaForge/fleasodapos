@@ -1,11 +1,11 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Sum, Q, F, Count
 from django.utils import timezone
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
-from .models import Product, ProductPriceHistory, Client, Sale, SaleItem, Payment, ProductComponent
+from .models import Product, ProductPriceHistory, Client, Sale, SaleItem, Payment, ProductComponent, PaymentAllocation
 from django.template.loader import get_template, render_to_string
 from xhtml2pdf import pisa
 import json
@@ -27,7 +27,7 @@ def get_cart_data(session):
 
 @login_required
 def dashboard(request):
-    now = timezone.now()
+    now = timezone.localtime()
     today = now.date()
     
     # 1. Ventas de Hoy (Excluye ajustes contables de cartera)
@@ -475,7 +475,7 @@ def client_statement(request, client_id):
         'total_paid': active_paid,
         'current_debt': current_debt,
         'credit_balance': credit_balance,
-        'now': timezone.now(),
+        'now': timezone.localtime(),
         'is_public': False
     }
     return render(request, 'pos/client_statement.html', context)
@@ -526,7 +526,7 @@ def client_public_statement(request, client_id):
         'total_paid': active_paid,
         'current_debt': current_debt,
         'credit_balance': credit_balance,
-        'now': timezone.now(),
+        'now': timezone.localtime(),
         'is_public': True
     }
     return render(request, 'pos/client_statement.html', context)
@@ -861,10 +861,11 @@ def checkout(request):
         if created_at_str:
             try:
                 # datetime-local format is YYYY-MM-DDTHH:MM
-                # We need to make it aware potentially, or just let Django handle the naive datetime if USE_TZ=True it might warn.
-                # Simplest is using standard parsing
                 dt = timezone.datetime.strptime(created_at_str, '%Y-%m-%dT%H:%M')
-                sale_date = timezone.make_aware(dt)
+                if timezone.is_naive(dt):
+                    sale_date = timezone.make_aware(dt)
+                else:
+                    sale_date = dt
             except (ValueError, TypeError):
                 pass
 
@@ -1105,7 +1106,7 @@ def report_analytics(request):
     date_start_str = request.GET.get('date_start')
     date_end_str = request.GET.get('date_end')
     
-    today = timezone.now().date()
+    today = timezone.localdate()
     
     if date_start_str:
         try:
@@ -1236,7 +1237,7 @@ def report_analytics(request):
     # 2. Daily Sales & Profit Trend for period
     daily_map = {}
     for sale in active_period_sales.prefetch_related('items__product'):
-        d = sale.date.date()
+        d = timezone.localtime(sale.date).date()
         if d not in daily_map:
             daily_map[d] = {'sales': 0, 'cost': 0, 'profit': 0}
         daily_map[d]['sales'] += sale.total
@@ -1337,7 +1338,7 @@ def report_analytics(request):
 @login_required
 def invoice_detail(request, sale_id):
     sale = get_object_or_404(Sale, id=sale_id)
-    return render(request, 'pos/invoice_detail.html', {'sale': sale, 'now': timezone.now()})
+    return render(request, 'pos/invoice_detail.html', {'sale': sale, 'now': timezone.localtime()})
 
 def client_statement_pdf(request, client_id):
     client = get_object_or_404(Client, id=client_id)
@@ -1377,7 +1378,7 @@ def client_statement_pdf(request, client_id):
         'total_paid': active_paid,
         'current_debt': current_debt,
         'credit_balance': credit_balance,
-        'now': timezone.now(),
+        'now': timezone.localtime(),
     }
     
     template_path = 'pos/pdf/client_statement_pdf.html'
@@ -1412,7 +1413,7 @@ def inventory_valuation_pdf(request):
         'total_sale_valuation': total_sale_valuation,
         'total_potential_profit': total_potential_profit,
         'avg_markup': avg_markup,
-        'now': timezone.now(),
+        'now': timezone.localtime(),
     }
     
     template_path = 'pos/pdf/inventory_valuation_pdf.html'
@@ -1758,26 +1759,85 @@ def set_default_client(request, client_id):
 @login_required
 def edit_sale(request, sale_id):
     sale = get_object_or_404(Sale, id=sale_id)
+    if sale.is_adjustment:
+        messages.error(request, 'Los comprobantes de ajuste contable no se pueden editar directamente.')
+        return redirect('invoice_detail', sale_id=sale.id)
+
     if request.method == 'POST':
-        # Edit Client
+        old_client = sale.client
+        old_payment_method = sale.payment_method
+
+        # 1. Edit Client
         client_id = request.POST.get('client_id')
-        if client_id:
-            client = get_object_or_404(Client, id=client_id)
-            sale.client = client
+        new_client = old_client
+        if client_id and str(client_id) != str(old_client.id):
+            new_client = get_object_or_404(Client, id=client_id)
+            sale.client = new_client
             
-        # Edit Date
+        # 2. Edit Payment Method
+        new_payment_method = request.POST.get('payment_method')
+        if new_payment_method in ['CASH', 'CREDIT']:
+            sale.payment_method = new_payment_method
+        else:
+            new_payment_method = old_payment_method
+
+        # 3. Edit Date
         date_str = request.POST.get('date')
         if date_str:
             try:
                 # Expecting YYYY-MM-DDTHH:MM
                 dt = timezone.datetime.strptime(date_str, '%Y-%m-%dT%H:%M')
-                sale.date = timezone.make_aware(dt)
+                if timezone.is_naive(dt):
+                    sale.date = timezone.make_aware(dt)
+                else:
+                    sale.date = dt
             except (ValueError, TypeError):
                  messages.error(request, 'Formato de fecha inválido')
         
         sale.note = request.POST.get('note', '')
-        sale.save()
-        messages.success(request, 'Factura actualizada correctamente.')
+
+        client_changed = (old_client.id != new_client.id)
+        method_changed = (old_payment_method != new_payment_method)
+
+        with transaction.atomic():
+            if method_changed or client_changed:
+                if new_payment_method == 'CASH':
+                    # Pasa a ser venta de CONTADO:
+                    # Se eliminan asignaciones de abonos/cartera previas sobre esta venta
+                    sale.allocations.all().delete()
+                    sale.is_paid = True
+                    sale.save()
+
+                    # Reconciliar cliente anterior si era crédito o si cambió de cliente
+                    if old_payment_method == 'CREDIT' or client_changed:
+                        reconcile_client_allocations(old_client)
+                    if client_changed:
+                        reconcile_client_allocations(new_client)
+
+                else: # new_payment_method == 'CREDIT'
+                    if client_changed:
+                        sale.allocations.all().delete()
+                        sale.save()
+                        reconcile_client_allocations(old_client)
+
+                    # Se marca inicialmente como pendiente de pago
+                    sale.is_paid = False
+                    sale.save()
+
+                    # Distribuir abonos activos del nuevo cliente según FIFO
+                    reconcile_client_allocations(new_client)
+                    sale.refresh_from_db()
+                    sale.is_paid = (sale.amount_paid >= sale.total)
+                    sale.save(update_fields=['is_paid'])
+            else:
+                sale.save()
+                if sale.payment_method == 'CREDIT':
+                    reconcile_client_allocations(sale.client)
+                    sale.refresh_from_db()
+                    sale.is_paid = (sale.amount_paid >= sale.total)
+                    sale.save(update_fields=['is_paid'])
+
+        messages.success(request, f'Factura #{sale.id} actualizada correctamente.')
         return redirect('invoice_detail', sale_id=sale.id)
     
     clients = Client.objects.all()
@@ -1812,6 +1872,10 @@ def add_product_to_sale(request, sale_id):
         if not product.is_active:
             return HttpResponse('El producto está dado de baja / inactivo y no se puede vender.', status=400)
         
+        can_sell, reason = product.can_sell(1)
+        if not can_sell:
+            return HttpResponse(f'Sin existencias suficientes: {reason}', status=400)
+        
         # Check if product already exists in sale
         existing_item = sale.items.filter(product=product).first()
         
@@ -1835,6 +1899,12 @@ def add_product_to_sale(request, sale_id):
         # Recalculate total
         sale.total = sum(item.subtotal for item in sale.items.all())
         sale.save()
+
+        if sale.payment_method == 'CREDIT':
+            reconcile_client_allocations(sale.client)
+            sale.refresh_from_db()
+            sale.is_paid = (sale.amount_paid >= sale.total)
+            sale.save(update_fields=['is_paid'])
         
         # Return updated items list
         items = sale.items.all()
@@ -1855,6 +1925,9 @@ def update_sale_item(request, sale_id, item_id):
         action = request.POST.get('action')
         
         if action == 'increment':
+            can_sell, reason = item.product.can_sell(1)
+            if not can_sell:
+                return HttpResponse(f'Sin existencias suficientes: {reason}', status=400)
             # Increase quantity
             item.quantity += 1
             item.save()
@@ -1882,6 +1955,12 @@ def update_sale_item(request, sale_id, item_id):
         # Recalculate total
         sale.total = sum(i.subtotal for i in sale.items.all())
         sale.save()
+
+        if sale.payment_method == 'CREDIT':
+            reconcile_client_allocations(sale.client)
+            sale.refresh_from_db()
+            sale.is_paid = (sale.amount_paid >= sale.total)
+            sale.save(update_fields=['is_paid'])
         
         # Return updated items list
         items = sale.items.all()
@@ -1904,6 +1983,9 @@ def annul_sale(request, sale_id):
             # Return stock
             for item in sale.items.all():
                 item.product.restore_stock(item.quantity)
+
+            if sale.payment_method == 'CREDIT':
+                reconcile_client_allocations(sale.client)
             
             messages.success(request, f'La factura #{sale.id} ha sido anulada y el inventario restaurado.')
         else:

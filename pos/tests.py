@@ -1,7 +1,9 @@
+import json
 from django.test import TestCase, Client as TestClient
 from django.contrib.auth.models import User
 from django.urls import reverse
-from .models import Product, ProductPriceHistory, ProductComponent, Client, Sale, SaleItem
+from django.utils import timezone
+from .models import Product, ProductPriceHistory, ProductComponent, Client, Sale, SaleItem, Payment
 
 class PriceAndProfitabilityTests(TestCase):
     def setUp(self):
@@ -741,6 +743,179 @@ class FinalConsumerAndFastCheckoutTests(TestCase):
         self.assertFalse(c1.is_default)
         self.assertTrue(c2.is_default)
         self.assertEqual(Client.get_default_client().id, c2.id)
+
+    def test_edit_sale_change_from_cash_to_credit(self):
+        client = Client.objects.create(name='Cliente Credito Test')
+        prod = Product.objects.create(name='Gaseosa', cost_price=1000, price=3500, stock=10)
+        sale = Sale.objects.create(
+            client=client,
+            payment_method='CASH',
+            total=3500,
+            is_paid=True
+        )
+        SaleItem.objects.create(sale=sale, product=prod, quantity=1, price=3500, cost_price=1000)
+
+        self.assertEqual(client.balance, 0)
+        self.assertEqual(sale.pending_balance, 0)
+
+        # GET view: verify payment method options are rendered
+        get_res = self.client.get(reverse('edit_sale', args=[sale.id]))
+        self.assertEqual(get_res.status_code, 200)
+        self.assertContains(get_res, 'Contado')
+        self.assertContains(get_res, 'Crédito')
+
+        # POST: change payment method from CASH to CREDIT
+        post_res = self.client.post(reverse('edit_sale', args=[sale.id]), {
+            'client_id': client.id,
+            'payment_method': 'CREDIT',
+            'date': timezone.localtime(sale.date).strftime('%Y-%m-%dT%H:%M'),
+            'note': 'Cambiado a crédito'
+        }, follow=True)
+
+        self.assertEqual(post_res.status_code, 200)
+        sale.refresh_from_db()
+        self.assertEqual(sale.payment_method, 'CREDIT')
+        self.assertFalse(sale.is_paid)
+        self.assertEqual(sale.pending_balance, 3500)
+        self.assertEqual(client.balance, 3500)
+
+    def test_edit_sale_change_from_credit_to_cash(self):
+        client = Client.objects.create(name='Cliente Pago Test')
+        prod = Product.objects.create(name='Snack', cost_price=800, price=2000, stock=10)
+        sale = Sale.objects.create(
+            client=client,
+            payment_method='CREDIT',
+            total=2000,
+            is_paid=False
+        )
+        SaleItem.objects.create(sale=sale, product=prod, quantity=1, price=2000, cost_price=800)
+
+        self.assertEqual(client.balance, 2000)
+        self.assertEqual(sale.pending_balance, 2000)
+
+        # POST: change payment method from CREDIT to CASH
+        post_res = self.client.post(reverse('edit_sale', args=[sale.id]), {
+            'client_id': client.id,
+            'payment_method': 'CASH',
+            'date': timezone.localtime(sale.date).strftime('%Y-%m-%dT%H:%M'),
+            'note': 'Cancelado en efectivo'
+        }, follow=True)
+
+        self.assertEqual(post_res.status_code, 200)
+        sale.refresh_from_db()
+        self.assertEqual(sale.payment_method, 'CASH')
+        self.assertTrue(sale.is_paid)
+        self.assertEqual(sale.pending_balance, 0)
+        self.assertEqual(client.balance, 0)
+
+    def test_edit_sale_change_from_cash_to_credit_with_prior_client_payment(self):
+        client = Client.objects.create(name='Cliente Con Abonos')
+        prod = Product.objects.create(name='Cuaderno', cost_price=2500, price=5000, stock=10)
+        
+        # Abono previo del cliente por $3,000
+        Payment.objects.create(client=client, amount=3000)
+
+        sale = Sale.objects.create(
+            client=client,
+            payment_method='CASH',
+            total=5000,
+            is_paid=True
+        )
+        SaleItem.objects.create(sale=sale, product=prod, quantity=1, price=5000, cost_price=2500)
+
+        # Al ser contado, su deuda es -$3,000 (saldo a favor por el abono)
+        self.assertEqual(client.balance, -3000)
+
+        # Cambiar venta a CRÉDITO
+        res = self.client.post(reverse('edit_sale', args=[sale.id]), {
+            'client_id': client.id,
+            'payment_method': 'CREDIT',
+            'date': timezone.localtime(sale.date).strftime('%Y-%m-%dT%H:%M'),
+            'note': 'Se pasó a crédito'
+        }, follow=True)
+
+        self.assertEqual(res.status_code, 200)
+        sale.refresh_from_db()
+        self.assertEqual(sale.payment_method, 'CREDIT')
+        # Se aplican los $3,000 de abono a la venta de $5,000
+        self.assertEqual(sale.amount_paid, 3000)
+        self.assertEqual(sale.pending_balance, 2000)
+        self.assertFalse(sale.is_paid)
+        self.assertEqual(client.balance, 2000)
+
+    def test_edit_sale_change_client_and_payment_method(self):
+        client_a = Client.objects.create(name='Cliente A')
+        client_b = Client.objects.create(name='Cliente B')
+        prod = Product.objects.create(name='Marcador', cost_price=1500, price=3000, stock=10)
+
+        sale = Sale.objects.create(
+            client=client_a,
+            payment_method='CASH',
+            total=3000,
+            is_paid=True
+        )
+        SaleItem.objects.create(sale=sale, product=prod, quantity=1, price=3000, cost_price=1500)
+
+        # Cambiar tanto el cliente a Cliente B como la forma de pago a Crédito
+        res = self.client.post(reverse('edit_sale', args=[sale.id]), {
+            'client_id': client_b.id,
+            'payment_method': 'CREDIT',
+            'date': timezone.localtime(sale.date).strftime('%Y-%m-%dT%H:%M'),
+            'note': 'Trasladado a crédito de Cliente B'
+        }, follow=True)
+
+        self.assertEqual(res.status_code, 200)
+        sale.refresh_from_db()
+        self.assertEqual(sale.client.id, client_b.id)
+        self.assertEqual(sale.payment_method, 'CREDIT')
+        self.assertFalse(sale.is_paid)
+        self.assertEqual(client_a.balance, 0)
+        self.assertEqual(client_b.balance, 3000)
+
+    def test_timezone_evening_sales_and_dashboard_metrics(self):
+        """
+        Prueba que las ventas realizadas en la noche (después de las 19:00 en Colombia,
+        cuando en UTC ya es el día siguiente) se contabilicen correctamente en 'Ventas de Hoy'
+        y en las gráficas de tendencia del día actual (sin adelantar la fecha a mañana).
+        """
+        import datetime
+        client = Client.objects.create(name='Cliente Nocturno')
+        prod = Product.objects.create(name='Producto Nocturno', cost_price=2000, price=5000, stock=20)
+
+        # Crear una venta a las 21:30 hora local de HOY
+        today_local = timezone.localdate()
+        evening_local_dt = timezone.make_aware(
+            datetime.datetime(today_local.year, today_local.month, today_local.day, 21, 30)
+        )
+        
+        sale = Sale.objects.create(
+            client=client,
+            payment_method='CASH',
+            total=10000,
+            is_paid=True,
+            date=evening_local_dt
+        )
+        SaleItem.objects.create(sale=sale, product=prod, quantity=2, price=5000, cost_price=2000)
+
+        # 1. Validar Dashboard
+        res_dash = self.client.get(reverse('dashboard'))
+        self.assertEqual(res_dash.status_code, 200)
+        self.assertGreaterEqual(res_dash.context['today_sales'], 10000)
+        self.assertGreaterEqual(res_dash.context['today_sales_count'], 1)
+        
+        # El último día de la tendencia debe ser HOY local, NO mañana
+        today_label = today_local.strftime('%d/%m')
+        self.assertEqual(json.loads(res_dash.context['labels_trend_json'])[-1], today_label)
+        self.assertGreaterEqual(json.loads(res_dash.context['data_trend_json'])[-1], 10000)
+
+        # 2. Validar Reportes (sales_report)
+        res_rep = self.client.get(reverse('reports'))
+        self.assertEqual(res_rep.status_code, 200)
+        self.assertEqual(res_rep.context['labels_dates'][-1], today_label)
+        self.assertGreaterEqual(res_rep.context['data_sales'][-1], 10000)
+
+
+
 
 
 

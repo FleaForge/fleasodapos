@@ -4,8 +4,21 @@
 {% block content %}
 <div class="max-w-4xl mx-auto bg-white p-6 md:p-8 rounded-xl shadow-sm border border-brand-100"
     x-data="{ searchOpen: false }">
-    <div class="flex justify-between items-center mb-6 pb-4 border-b border-gray-100">
-        <h2 class="text-2xl font-extrabold text-gray-800">Editar Factura #{{ sale.id }}</h2>
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+        <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-2xl font-extrabold text-gray-800">Editar Factura #{{ sale.id }}</h2>
+            {% if sale.payment_method == 'CASH' %}
+            <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">
+                <span>💵</span>
+                <span>Contado</span>
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 shadow-2xs">
+                <span>📝</span>
+                <span>Crédito</span>
+            </span>
+            {% endif %}
+        </div>
         <a href="{% url 'invoice_detail' sale.id %}" class="inline-flex items-center gap-1.5 text-gray-700 hover:text-brand-500 bg-gray-100 hover:bg-gray-200 px-3.5 py-2 rounded-xl font-semibold text-sm transition active:scale-95">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
             <span>Volver a Factura</span>
@@ -93,6 +106,65 @@
                     </div>
                 </div>
 
+                <!-- Forma / Método de Pago -->
+                <div x-data="{
+                    method: '{{ sale.payment_method }}',
+                    initialMethod: '{{ sale.payment_method }}'
+                }">
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Forma de Pago</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <!-- Opción Contado -->
+                        <label class="relative flex flex-col p-3 rounded-xl border-2 cursor-pointer transition select-none"
+                            :class="method === 'CASH'
+                                ? 'border-emerald-500 bg-emerald-50/70 shadow-xs ring-2 ring-emerald-500/20'
+                                : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/60'">
+                            <input type="radio" name="payment_method" value="CASH" x-model="method" class="sr-only">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xl">💵</span>
+                                <span x-show="method === 'CASH'" class="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-black">✓</span>
+                            </div>
+                            <span class="text-sm font-bold text-gray-800">Contado</span>
+                            <span class="text-[11px] text-gray-500 leading-tight mt-0.5">Pagada de inmediato</span>
+                        </label>
+
+                        <!-- Opción Crédito -->
+                        <label class="relative flex flex-col p-3 rounded-xl border-2 cursor-pointer transition select-none"
+                            :class="method === 'CREDIT'
+                                ? 'border-amber-500 bg-amber-50/70 shadow-xs ring-2 ring-amber-500/20'
+                                : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/60'">
+                            <input type="radio" name="payment_method" value="CREDIT" x-model="method" class="sr-only">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xl">📝</span>
+                                <span x-show="method === 'CREDIT'" class="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-black">✓</span>
+                            </div>
+                            <span class="text-sm font-bold text-gray-800">Crédito</span>
+                            <span class="text-[11px] text-gray-500 leading-tight mt-0.5">Cuenta por cobrar</span>
+                        </label>
+                    </div>
+
+                    <!-- Mensajes informativos contextuales de cambio -->
+                    <div class="mt-2 text-xs">
+                        <template x-if="method === 'CREDIT' && initialMethod === 'CASH'">
+                            <div class="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 flex items-start gap-2 animate-fadeIn">
+                                <span class="text-base flex-shrink-0">⚠️</span>
+                                <div>
+                                    <span class="font-bold">Cambio a Crédito:</span>
+                                    <span>Esta factura se registrará como deuda en la cartera del cliente por ${{ sale.total|intcomma }}. Se aplicarán abonos previos automáticamente si el cliente los tiene (FIFO).</span>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="method === 'CASH' && initialMethod === 'CREDIT'">
+                            <div class="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-start gap-2 animate-fadeIn">
+                                <span class="text-base flex-shrink-0">💡</span>
+                                <div>
+                                    <span class="font-bold">Cambio a Contado:</span>
+                                    <span>La factura quedará cancelada en efectivo directo. Los abonos o pagos del cliente que estaban aplicados a esta venta se liberarán para cubrir otras cuentas pendientes.</span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Comentario / Notas</label>
                     <textarea name="note" rows="3"
@@ -102,7 +174,7 @@
                 <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
                     <p class="text-xs text-yellow-800 font-medium">⚠️ Advertencia</p>
                     <p class="text-xs text-yellow-700 mt-1">
-                        Cambiar la fecha o el cliente puede afectar los reportes y estados de cuenta.
+                        Cambiar la fecha, el cliente o la forma de pago (contado/crédito) actualizará automáticamente los reportes, la cartera y el estado de cuenta del cliente.
                     </p>
                 </div>
 

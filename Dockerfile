@@ -5,7 +5,8 @@ FROM python:3.13.11-slim-bookworm
 # PYTHONDONTWRITEBYTECODE: Prevents Python from writing pyc files to disc
 # PYTHONUNBUFFERED: Prevents Python from buffering stdout and stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    TZ=America/Bogota
 
 # Set work directory
 WORKDIR /app
@@ -13,7 +14,9 @@ WORKDIR /app
 # Install system dependencies
 # gcc and others needed for some python packages
 # npm needed for tailwind build step
+# tzdata ensures container OS timezone matches Colombia/Bogota
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    tzdata \
     gcc \
     python3-dev \
     pkg-config \
@@ -23,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libffi-dev \
     libssl-dev \
     npm \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies
