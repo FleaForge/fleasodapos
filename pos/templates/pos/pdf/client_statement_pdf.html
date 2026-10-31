@@ -4,69 +4,228 @@
 
 <head>
     <meta charset="UTF-8">
+    <title>Estado de Cuenta - {{ client.name }}</title>
     <style>
         @page {
             size: letter;
-            margin: 2cm;
+            margin: 1.2cm 1.4cm 1.4cm 1.4cm;
 
             @frame footer_frame {
                 -pdf-frame-content: footerContent;
-                bottom: 1cm;
-                margin-left: 2cm;
-                margin-right: 2cm;
-                height: 1cm;
+                bottom: 0.6cm;
+                margin-left: 1.4cm;
+                margin-right: 1.4cm;
+                height: 0.8cm;
             }
         }
 
         body {
             font-family: Helvetica, Arial, sans-serif;
-            font-size: 11px;
+            font-size: 9.5px;
+            color: #1e293b;
+            line-height: 1.3;
         }
 
-        h1 {
-            font-size: 16px;
-            color: #333;
-            margin-bottom: 5px;
-        }
-
-        h2 {
-            font-size: 14px;
-            color: #555;
-            margin-bottom: 10px;
-        }
-
-        .header {
-            margin-bottom: 20px;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 10px;
-        }
-
-        .client-info {
-            margin-bottom: 20px;
-        }
-
-        table {
+        /* HEADER SECTION */
+        .header-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
+            border-bottom: 2px solid #5592a3;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
         }
 
-        th {
-            background-color: #f3f3f3;
-            padding: 6px;
-            text-align: left;
-            border-bottom: 2px solid #333;
+        .header-brand {
+            vertical-align: top;
+            padding-right: 15px;
+        }
+
+        .brand-title {
+            font-size: 16px;
             font-weight: bold;
-            font-size: 10px;
-            text-transform: uppercase;
+            color: #0f172a;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
         }
 
-        td {
-            padding: 6px;
-            border-bottom: 1px solid #eee;
+        .brand-info {
+            font-size: 8.5px;
+            color: #64748b;
+            margin-bottom: 6px;
+        }
+
+        .doc-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #0f766e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 3px;
+        }
+
+        .emission-date {
+            font-size: 8.5px;
+            color: #475569;
+            margin-top: 5px;
+        }
+
+        /* CLIENT SUMMARY CARD */
+        .header-client {
             vertical-align: top;
         }
 
+        .client-box {
+            background-color: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            padding: 6px 10px;
+        }
+
+        .client-box-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .client-box-table td {
+            padding: 1.5px 0;
+            font-size: 8.5px;
+            border: none;
+        }
+
+        .client-label {
+            color: #64748b;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 8px;
+            width: 32%;
+        }
+
+        .client-value {
+            color: #0f172a;
+            font-weight: normal;
+        }
+
+        .client-debt-row td {
+            padding-top: 4px;
+            border-top: 1px dashed #cbd5e1;
+        }
+
+        .client-debt-label {
+            color: #b91c1c;
+            font-weight: bold;
+            font-size: 8.5px;
+            text-transform: uppercase;
+        }
+
+        .client-debt-value {
+            font-size: 13px;
+            font-weight: bold;
+            color: #dc2626;
+            text-align: right;
+        }
+
+        .client-paid-value {
+            font-size: 11px;
+            font-weight: bold;
+            color: #16a34a;
+            text-align: right;
+        }
+
+        /* SECTION TITLE */
+        .section-header {
+            margin-bottom: 6px;
+        }
+
+        .section-title {
+            font-size: 10px;
+            font-weight: bold;
+            color: #334155;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .section-subtitle {
+            font-size: 8px;
+            color: #64748b;
+        }
+
+        /* DATA TABLE */
+        .statement-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 4px;
+        }
+
+        thead {
+            display: table-header-group;
+        }
+
+        .statement-table th {
+            background-color: #f1f5f9;
+            color: #334155;
+            padding: 5px 6px;
+            font-size: 8.5px;
+            font-weight: bold;
+            text-transform: uppercase;
+            border-top: 1px solid #94a3b8;
+            border-bottom: 1.5px solid #475569;
+            text-align: left;
+        }
+
+        .statement-table td {
+            padding: 4px 6px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 8.5px;
+            vertical-align: middle;
+        }
+
+        .statement-table tr:nth-child(even) td {
+            background-color: #fafbfc;
+        }
+
+        /* BADGES */
+        .badge {
+            display: inline-block;
+            padding: 1.5px 5px;
+            border-radius: 3px;
+            font-size: 8px;
+            font-weight: bold;
+            letter-spacing: 0.3px;
+        }
+
+        .badge-factura {
+            background-color: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+        }
+
+        .badge-ajuste {
+            background-color: #fffbeb;
+            color: #b45309;
+            border: 1px solid #fde68a;
+        }
+
+        /* DETAIL / ITEMS */
+        .items-inline {
+            font-size: 8px;
+            color: #475569;
+            line-height: 1.3;
+        }
+
+        .note-concept {
+            font-size: 8.5px;
+            font-weight: bold;
+            color: #334155;
+            margin-bottom: 1px;
+        }
+
+        .abono-applied {
+            font-size: 7.5px;
+            color: #15803d;
+            margin-top: 1.5px;
+        }
+
+        /* TEXT UTILS */
         .text-right {
             text-align: right;
         }
@@ -75,222 +234,196 @@
             text-align: center;
         }
 
-        .badge {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 9px;
+        .font-bold {
             font-weight: bold;
-            margin-right: 5px;
         }
 
-        .badge-compra {
-            background-color: #ffebee;
-            color: #c62828;
+        .text-danger {
+            color: #dc2626;
         }
 
-        .badge-abono {
-            background-color: #e8f5e9;
-            color: #2e7d32;
+        .text-success {
+            color: #16a34a;
         }
 
-        .badge-anulacion {
-            background-color: #f5f5f5;
-            color: #616161;
+        .text-muted {
+            color: #64748b;
         }
 
-        .amount-compra {
-            color: #d32f2f;
+        /* TABLE FOOTER */
+        .total-row td {
+            background-color: #f1f5f9 !important;
+            border-top: 2px solid #334155;
+            border-bottom: 2px solid #334155;
             font-weight: bold;
-            font-size: 12px;
+            font-size: 9.5px;
+            padding: 6px;
         }
 
-        .amount-abono {
-            color: #388e3c;
-            font-weight: bold;
-            font-size: 12px;
-        }
-
-        .amount-anulacion {
-            color: #757575;
-            font-weight: bold;
-            font-size: 12px;
-        }
-
-        .total-box {
-            margin-top: 20px;
-            text-align: right;
-            font-size: 14px;
-            border-top: 2px solid #333;
-            padding-top: 10px;
-        }
-
-        .footer {
-            font-size: 9px;
-            color: #888;
+        .empty-row td {
+            padding: 20px;
             text-align: center;
-        }
-
-        .items-detail {
-            font-size: 9px;
-            color: #666;
-            padding-left: 10px;
-            margin-top: 3px;
-        }
-
-        .reset-row {
-            background-color: #e8f5e9;
-            border-top: 2px solid #4caf50;
-            border-bottom: 2px solid #4caf50;
-            font-weight: bold;
-            color: #2e7d32;
-            text-align: center;
-            padding: 8px;
+            color: #15803d;
             font-size: 10px;
-            text-transform: uppercase;
+            background-color: #f0fdf4;
+            border: 1px solid #bbf7d0;
+        }
+
+        /* FOOTER */
+        #footerContent {
+            font-size: 8px;
+            color: #94a3b8;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 4px;
         }
     </style>
 </head>
 
 <body>
-    <div class="header">
-        <h1>FleasoDaPos Papelería</h1>
-        <h2>Estado de Cuenta</h2>
-        <p>Generado el: {{ now|date:"d/m/Y H:i" }}</p>
-    </div>
+    <!-- HEADER -->
+    <table class="header-table" cellpadding="0" cellspacing="0">
+        <tr>
+            <td width="58%" class="header-brand">
+                <div class="brand-title">FLEASODAPOS PAPELERÍA</div>
+                <div class="brand-info">
+                    NIT: 123456789-0 &bull; Calle 3 # 2-01 La Playa &bull; Tel: 3208581391
+                </div>
+                <div class="doc-title">ESTADO DE CUENTA DE CLIENTE</div>
+                <div class="emission-date">
+                    Fecha de corte: <b>{{ now|date:"d/m/Y H:i" }}</b>
+                </div>
+            </td>
+            <td width="42%" class="header-client">
+                <div class="client-box">
+                    <table class="client-box-table">
+                        <tr>
+                            <td class="client-label">Cliente:</td>
+                            <td class="client-value font-bold">{{ client.name|upper }}</td>
+                        </tr>
+                        {% if client.phone %}
+                        <tr>
+                            <td class="client-label">Teléfono:</td>
+                            <td class="client-value">{{ client.phone }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if client.email %}
+                        <tr>
+                            <td class="client-label">Email:</td>
+                            <td class="client-value">{{ client.email|truncatechars:28 }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr class="client-debt-row">
+                            <td class="client-debt-label">TOTAL A PAGAR:</td>
+                            <td class="client-debt-value">
+                                {% if current_debt > 0 %}
+                                ${{ current_debt|intcomma }}
+                                {% elif credit_balance > 0 %}
+                                <span class="client-paid-value">+${{ credit_balance|intcomma }} (A FAVOR)</span>
+                                {% else %}
+                                <span class="client-paid-value">$0 (PAZ Y SALVO)</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </td>
+        </tr>
+    </table>
 
-    <div class="client-info">
-        <table style="width: 100%; border: none; margin-top: 0;">
-            <tr>
-                <td style="border: none; padding: 0;">
-                    <strong>Cliente:</strong> {{ client.name }} <br>
-                    <strong>Teléfono:</strong> {{ client.phone }} <br>
-                    <strong>Email:</strong> {{ client.email }}
-                </td>
-                <td style="border: none; padding: 0; text-align: right; vertical-align: top;">
-                    <div style="background-color: #f9f9f9; padding: 10px; border-radius: 5px; display: inline-block;">
-                        <span style="font-size: 10px; color: #666; text-transform: uppercase;">Saldo Actual</span><br>
-                        <span
-                            style="font-size: 16px; font-weight: bold; color: {% if current_debt > 0 %}#d32f2f{% else %}#388e3c{% endif %};">
-                            ${{ current_debt|intcomma }}
-                        </span>
-                    </div>
-                </td>
-            </tr>
-        </table>
-    </div>
+    <!-- SECTION TITLE -->
+    <table width="100%" class="section-header" cellpadding="0" cellspacing="0">
+        <tr>
+            <td class="section-title">
+                Facturas y Deudas Pendientes de Pago
+            </td>
+            <td class="section-subtitle text-right">
+                {% if pending_sales %}
+                {{ pending_sales|length }} comprobante{{ pending_sales|length|pluralize:"s" }} pendiente{{ pending_sales|length|pluralize:"s" }}
+                {% endif %}
+            </td>
+        </tr>
+    </table>
 
-    <table>
+    <!-- TABLE -->
+    <table class="statement-table">
         <thead>
             <tr>
-                <th width="15%">Emisión</th>
-                <th width="40%">Comprobante</th>
-                <th width="15%" class="text-right">Valor Inicial</th>
-                <th width="15%" class="text-right">Abonado</th>
-                <th width="15%" class="text-right">Falta</th>
+                <th width="12%">Emisión</th>
+                <th width="14%">Comprobante</th>
+                <th width="38%">Detalle / Artículos</th>
+                <th width="12%" class="text-right">Total Factura</th>
+                <th width="12%" class="text-right">Abonado</th>
+                <th width="12%" class="text-right">Saldo Pend.</th>
             </tr>
         </thead>
         <tbody>
             {% for sale in pending_sales %}
             <tr>
-                <td style="font-size: 10px; color: #666;">
-                    {{ sale.date|date:"d/m/Y" }}<br>
-                    <span style="color: #999;">{{ sale.date|date:"H:i" }}</span>
+                <td>
+                    <b>{{ sale.date|date:"d/m/Y" }}</b><br>
+                    <span class="text-muted">{{ sale.date|date:"H:i" }}</span>
                 </td>
                 <td>
-                    <div>
-                        {% if sale.is_adjustment %}
-                        <span class="badge" style="background-color: #fff8e1; color: #b78103; border: 1px solid #ffe082;">AJUSTE #{{ sale.id }}</span>
-                        {% else %}
-                        <span class="badge badge-compra">FACTURA #{{ sale.id }}</span>
-                        {% endif %}
-                    </div>
-                    
+                    {% if sale.is_adjustment %}
+                    <span class="badge badge-ajuste">AJUSTE #{{ sale.id }}</span>
+                    {% else %}
+                    <span class="badge badge-factura">FACTURA #{{ sale.id }}</span>
+                    {% endif %}
+                </td>
+                <td>
                     {% if sale.note %}
-                    <div style="font-size: 9px; color: #444; margin-top: 2px;">
-                        <strong>Concepto:</strong> {{ sale.note }}
-                    </div>
+                    <div class="note-concept">Concepto: {{ sale.note }}</div>
                     {% endif %}
 
                     {% if sale.items.all %}
-                    <div class="items-detail" style="margin-top:2px; font-size:9px; color:#555; background:#f9f9f9; padding:2px 5px; border-radius:2px;">
-                        <strong>Contenido:</strong><br>
+                    <div class="items-inline">
                         {% for item in sale.items.all %}
-                            {{ item.quantity }}x {{ item.product.name|truncatechars:25 }} - <strong>${{ item.subtotal|intcomma }}</strong><br>
+                        {{ item.quantity }}x {{ item.product.name|truncatechars:26 }}{% if item.subtotal %} (<b>${{ item.subtotal|intcomma }}</b>){% endif %}{% if not forloop.last %} &bull; {% endif %}
                         {% endfor %}
                     </div>
+                    {% elif not sale.note %}
+                    <span class="text-muted">Venta a crédito directa</span>
                     {% endif %}
 
-                    {% if sale.allocations.all %}
-                    <div class="items-detail" style="margin-top:2px; font-size:9px;">
-                        <strong style="color: #2e7d32;">Abonos aplicados:</strong><br>
-                        {% for alloc in sale.allocations.all %}
-                            {% if not alloc.payment.is_annulled %}
-                            - {{ alloc.payment.date|date:"d/m/Y" }} (Recibo #{{ alloc.payment.id }}): <strong style="color:#388e3c;">+${{ alloc.amount|intcomma }}</strong><br>
-                            {% endif %}
-                        {% endfor %}
+                    {% if sale.amount_paid > 0 %}
+                    <div class="abono-applied">
+                        ↳ Abonos: <b>+${{ sale.amount_paid|intcomma }}</b> (Recibo {% for alloc in sale.allocations.all %}{% if not alloc.payment.is_annulled %}#{{ alloc.payment.id }}{% if not forloop.last %}, {% endif %}{% endif %}{% endfor %})
                     </div>
                     {% endif %}
                 </td>
-                <td class="text-right" style="color: #555; font-size: 10px;">
+                <td class="text-right font-bold text-muted">
                     ${{ sale.total|intcomma }}
                 </td>
-                <td class="text-right" style="color: #388e3c; font-weight:bold;">
+                <td class="text-right font-bold text-success">
                     ${{ sale.amount_paid|intcomma }}
                 </td>
-                <td class="text-right" style="color: #d32f2f; font-weight:bold;">
+                <td class="text-right font-bold text-danger" style="font-size: 9px;">
                     ${{ sale.pending_balance|intcomma }}
                 </td>
             </tr>
             {% empty %}
-            <tr>
-                <td colspan="5" class="text-center">Cuenta estrictamente al día. Sin deuda activa.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    {% if recent_payments %}
-    <h3 style="font-size: 11px; margin-top: 15px; margin-bottom: 5px; text-transform: uppercase; color: #333;">Comprobantes Oficiales de Abono Recibidos</h3>
-    <table>
-        <thead>
-            <tr>
-                <th width="20%">Fecha</th>
-                <th width="15%">Recibo</th>
-                <th width="35%">Aplicado a</th>
-                <th width="15%">Nota</th>
-                <th width="15%" class="text-right">Monto</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for payment in recent_payments %}
-            {% if not payment.is_annulled %}
-            <tr>
-                <td style="font-size: 9px; color: #666;">{{ payment.date|date:"d/m/Y H:i" }}</td>
-                <td style="font-size: 9px; font-weight: bold;">Recibo #{{ payment.id }}</td>
-                <td style="font-size: 9px; color: #444;">
-                    {% for alloc in payment.allocations.all %}
-                        ↳ {% if alloc.sale.is_adjustment %}Ajuste #{{ alloc.sale.id }}{% else %}Factura #{{ alloc.sale.id }}{% endif %} (+${{ alloc.amount|intcomma }})<br>
-                    {% empty %}
-                        Abono general a cartera
-                    {% endfor %}
+            <tr class="empty-row">
+                <td colspan="6">
+                    <b>✓ Cuenta en Paz y Salvo.</b> El cliente no registra deudas ni facturas pendientes de pago.
                 </td>
-                <td style="font-size: 9px; color: #666;">{{ payment.note|default:"Ingreso caja"|truncatechars:20 }}</td>
-                <td class="text-right" style="color: #388e3c; font-weight: bold; font-size: 10px;">+${{ payment.amount|intcomma }}</td>
             </tr>
-            {% endif %}
             {% endfor %}
         </tbody>
+        {% if pending_sales %}
+        <tfoot>
+            <tr class="total-row">
+                <td colspan="3" class="text-right">TOTAL PENDIENTE:</td>
+                <td class="text-right text-muted">${{ total_pending_original|intcomma }}</td>
+                <td class="text-right text-success">${{ total_pending_paid|intcomma }}</td>
+                <td class="text-right text-danger" style="font-size: 11px;">${{ total_pending_balance|intcomma }}</td>
+            </tr>
+        </tfoot>
+        {% endif %}
     </table>
-    {% endif %}
 
-    <div class="total-box">
-        Saldo Pendiente Actual: <strong style="color: {% if current_debt > 0 %}#d32f2f{% else %}#388e3c{% endif %};">${{ current_debt|intcomma }}</strong>
-    </div>
-
-    <div id="footerContent" class="footer">
-        Este documento es un comprobante informativo generado por FleasoDaPos System.
-        Página <pdf:pagenumber>
+    <div id="footerContent">
+        FleasoDaPos System &bull; Comprobante informativo de cartera &bull; Página <pdf:pagenumber>
     </div>
 </body>
 

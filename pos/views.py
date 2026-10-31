@@ -1368,12 +1368,16 @@ def client_statement_pdf(request, client_id):
             if s.pending_balance > 0
         ]
 
-    recent_payments = client.payments.filter(is_annulled=False, is_consolidation=False).prefetch_related('allocations__sale').order_by('-date')[:15]
+    total_pending_original = sum(s.total for s in pending_sales)
+    total_pending_paid = sum(s.amount_paid for s in pending_sales)
+    total_pending_balance = sum(s.pending_balance for s in pending_sales)
 
     context = {
         'client': client,
         'pending_sales': pending_sales,
-        'recent_payments': recent_payments,
+        'total_pending_original': total_pending_original,
+        'total_pending_paid': total_pending_paid,
+        'total_pending_balance': total_pending_balance,
         'total_credit': active_credit,
         'total_paid': active_paid,
         'current_debt': current_debt,

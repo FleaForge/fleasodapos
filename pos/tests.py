@@ -914,6 +914,38 @@ class FinalConsumerAndFastCheckoutTests(TestCase):
         self.assertEqual(res_rep.context['labels_dates'][-1], today_label)
         self.assertGreaterEqual(res_rep.context['data_sales'][-1], 10000)
 
+class ClientStatementPDFTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='pdf_admin', password='password123')
+        self.client = TestClient()
+        self.client.login(username='pdf_admin', password='password123')
+        self.customer = Client.objects.create(name='Cliente PDF Test', phone='3001234567', email='test@example.com')
+        self.product = Product.objects.create(name='Producto Test', price=5000, cost_price=3000, stock=20)
+
+    def test_client_statement_pdf_generation_with_debt(self):
+        sale = Sale.objects.create(
+            client=self.customer,
+            total=10000,
+            payment_method='CREDIT',
+            is_paid=False
+        )
+        SaleItem.objects.create(sale=sale, product=self.product, quantity=2, price=5000, cost_price=3000)
+
+        response = self.client.get(reverse('client_statement_pdf', args=[self.customer.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertIn('Estado_Cuenta_', response['Content-Disposition'])
+        self.assertTrue(len(response.content) > 1000)
+        self.assertTrue(response.content.startswith(b'%PDF'))
+
+    def test_client_statement_pdf_generation_paz_y_salvo(self):
+        # Client without debt
+        response = self.client.get(reverse('client_statement_pdf', args=[self.customer.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(response.content.startswith(b'%PDF'))
+
+
 
 
 
