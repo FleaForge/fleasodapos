@@ -25,11 +25,15 @@ class Product(models.Model):
     @property
     def has_components(self):
         """Verifica si este producto tiene insumos/componentes vinculados"""
+        if hasattr(self, '_prefetched_objects_cache') and 'components' in self._prefetched_objects_cache:
+            return len(self.components.all()) > 0
         return self.components.exists()
 
     @property
     def components_cost(self):
         """Costo acumulado calculado a partir de sus insumos vinculados"""
+        if hasattr(self, '_prefetched_objects_cache') and 'components' in self._prefetched_objects_cache:
+            return sum(comp.subtotal_cost for comp in self.components.all())
         return sum(comp.subtotal_cost for comp in self.components.select_related('component_product').all())
 
     @property
@@ -95,7 +99,8 @@ class Product(models.Model):
         if not self.has_components:
             return 9999 if self.is_service else self.stock
         availabilities = []
-        for comp in self.components.select_related('component_product').all():
+        comps = self.components.all() if (hasattr(self, '_prefetched_objects_cache') and 'components' in self._prefetched_objects_cache) else self.components.select_related('component_product').all()
+        for comp in comps:
             if comp.quantity > 0:
                 availabilities.append(int(comp.component_product.stock // comp.quantity))
         return min(availabilities) if availabilities else 0
@@ -124,7 +129,8 @@ class Product(models.Model):
         if not self.is_active:
             return False, f'El producto "{self.name}" está inactivo o dado de baja.'
         if self.has_components:
-            for comp in self.components.select_related('component_product').all():
+            comps = self.components.all() if (hasattr(self, '_prefetched_objects_cache') and 'components' in self._prefetched_objects_cache) else self.components.select_related('component_product').all()
+            for comp in comps:
                 needed = int(float(comp.quantity) * quantity)
                 if comp.component_product.stock < needed:
                     available = int(comp.component_product.stock // comp.quantity) if comp.quantity > 0 else 0

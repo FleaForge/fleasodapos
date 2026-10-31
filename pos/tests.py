@@ -945,6 +945,34 @@ class ClientStatementPDFTests(TestCase):
         self.assertEqual(response['Content-Type'], 'application/pdf')
         self.assertTrue(response.content.startswith(b'%PDF'))
 
+class POSProductSearchTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='search_admin', password='password123')
+        self.client = TestClient()
+        self.client.login(username='search_admin', password='password123')
+        self.p1 = Product.objects.create(name='3L ROJA', barcode='770123456789', price=8000, cost_price=6000, stock=10)
+        self.p2 = Product.objects.create(name='Cuaderno Norma 100 Hojas', barcode='770987654321', price=5000, cost_price=3000, stock=5)
+
+    def test_multi_word_search(self):
+        # Searching "3 roja" should find "3L ROJA"
+        res = self.client.get(reverse('search_products'), {'search': '3 roja'})
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, '3L ROJA')
+        self.assertNotContains(res, 'Cuaderno Norma')
+
+        # Searching "norma 100" should find "Cuaderno Norma 100 Hojas"
+        res2 = self.client.get(reverse('search_products'), {'search': 'norma 100'})
+        self.assertEqual(res2.status_code, 200)
+        self.assertContains(res2, 'Cuaderno Norma 100 Hojas')
+        self.assertNotContains(res2, '3L ROJA')
+
+    def test_exact_barcode_search(self):
+        res = self.client.get(reverse('search_products'), {'search': '770123456789'})
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, '3L ROJA')
+        self.assertNotContains(res, 'Cuaderno Norma')
+
+
 
 
 

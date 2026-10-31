@@ -637,9 +637,18 @@ def pos(request):
 def search_products(request):
     query = request.GET.get('search', '').strip()
     if query:
-        products = Product.objects.filter(is_active=True).filter(
-            Q(name__icontains=query) | Q(barcode__icontains=query)
-        ).order_by('name')
+        base_qs = Product.objects.filter(is_active=True).select_related('category').prefetch_related('components__component_product')
+        
+        # Check exact barcode match first
+        barcode_exact = base_qs.filter(barcode__iexact=query).first()
+        if barcode_exact:
+            products = [barcode_exact]
+        else:
+            terms = query.split()
+            q_filter = Q()
+            for term in terms:
+                q_filter &= (Q(name__icontains=term) | Q(barcode__icontains=term) | Q(category__name__icontains=term))
+            products = list(base_qs.filter(q_filter).order_by('name')[:40])
     else:
         products = []
     return render(request, 'pos/partials/pos_product_search.html', {'products': products})

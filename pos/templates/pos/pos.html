@@ -33,7 +33,7 @@
           placeholder="Buscar artículo o escanear código..."
           class="w-full p-3 pl-10 pr-28 sm:pr-32 bg-brand-50 rounded-lg border border-brand-100 focus:ring-2 focus:ring-brand-500 text-slate-800 text-sm md:text-base outline-none"
           hx-get="{% url 'search_products' %}"
-          hx-trigger="keyup changed delay:200ms, search"
+          hx-trigger="keyup changed delay:300ms, search"
           hx-target="#pos-results"
           autofocus
           autocomplete="off"
@@ -51,17 +51,18 @@
       </div>
     </div>
 
-    <!-- Scrollable Grid -->
+    <!-- Scrollable Results List (Mobile-Optimized Single Lines) -->
     <div
       id="pos-results"
-      class="flex-1 overflow-y-auto grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-3 content-start pb-24 md:pb-0"
+      class="flex-1 overflow-y-auto flex flex-col gap-1.5 sm:gap-2 content-start pb-24 md:pb-0 pr-0.5"
     >
       <!-- Results load here -->
       <div
-        class="col-span-full text-center text-gray-400 mt-20 flex flex-col items-center"
+        class="text-center text-gray-400 mt-16 flex flex-col items-center"
       >
         <span class="text-4xl mb-2">🔍</span>
-        <p class="text-sm">Busca productos para agregar al carrito</p>
+        <p class="text-sm font-medium">Busca productos para agregar al carrito</p>
+        <p class="text-xs text-slate-400 mt-0.5">Escribe el nombre, referencia o escanea el código</p>
       </div>
     </div>
   </div>
