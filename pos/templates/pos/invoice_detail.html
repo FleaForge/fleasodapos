@@ -170,6 +170,13 @@
             <span class="{% if sale.is_adjustment %}text-amber-600{% else %}text-brand-500{% endif %}">${{ sale.total|intcomma }}</span>
         </div>
 
+        {% if sale.payment_method == 'CREDIT' and not sale.is_annulled %}
+        <div class="mt-3 space-y-2 text-sm">
+            <div class="flex justify-between text-emerald-700"><span>Abonos recibidos:</span><strong>${{ sale.amount_paid|intcomma }}</strong></div>
+            <div class="flex justify-between text-amber-700"><span>Saldo pendiente:</span><strong>${{ sale.pending_balance|intcomma }}</strong></div>
+        </div>
+        {% endif %}
+
         <!-- Auditoría de Rentabilidad Interna (Solo en Pantalla, No se Imprime) -->
         {% if not sale.is_adjustment and not sale.is_annulled %}
         <div class="mt-4 p-3.5 bg-emerald-50/80 rounded-xl border border-emerald-200 no-print text-left">

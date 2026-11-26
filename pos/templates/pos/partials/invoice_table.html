@@ -70,6 +70,10 @@
                 <!-- Total & Ganancia -->
                 <td class="py-3.5 px-4 text-right whitespace-nowrap">
                     <div class="font-extrabold text-slate-800 text-sm font-mono">${{ invoice.total|intcomma }}</div>
+                    {% if invoice.payment_method == 'CREDIT' and not invoice.is_annulled %}
+                    <div class="text-xs text-emerald-700 mt-1">Abonado: ${{ invoice.amount_paid|intcomma }}</div>
+                    <div class="text-xs font-bold text-amber-700">Pendiente: ${{ invoice.pending_balance|intcomma }}</div>
+                    {% endif %}
                     {% if not invoice.is_adjustment and not invoice.is_annulled %}
                     <div class="text-[11px] font-bold text-emerald-600 flex items-center justify-end gap-1 mt-0.5">
                         <span class="font-mono">{% if invoice.total_profit >= 0 %}+{% endif %}${{ invoice.total_profit|intcomma }}</span>

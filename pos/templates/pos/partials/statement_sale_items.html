@@ -1,0 +1,17 @@
+{% load humanize %}
+{% if sale.items.all %}
+<details class="group no-print">
+  <summary class="min-h-11 inline-flex items-center gap-2 text-xs font-bold text-blue-700 cursor-pointer list-none">
+    Artículos ({{ sale.items.count }})
+    <svg class="w-4 h-4 shrink-0 group-open:rotate-180" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+  </summary>
+  <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 divide-y divide-slate-200 text-xs">
+    {% for item in sale.items.all %}
+    <div class="flex justify-between items-start gap-3 py-2.5">
+      <span class="min-w-0 break-words text-slate-700">{{ item.quantity }} × {{ item.product.name }}</span>
+      <strong class="shrink-0 whitespace-nowrap text-slate-800">${{ item.subtotal|intcomma }}</strong>
+    </div>
+    {% endfor %}
+  </div>
+</details>
+{% endif %}

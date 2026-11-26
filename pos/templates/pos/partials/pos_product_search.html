@@ -8,7 +8,7 @@
             <div class="flex items-center gap-1.5 flex-wrap">
                 <span class="font-bold text-slate-700 text-xs sm:text-sm truncate max-w-full">{{ product.name }}</span>
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                    🧪 Insumos Agotados
+                    Insumos Agotados
                 </span>
             </div>
             <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400 font-mono">
@@ -71,11 +71,11 @@
                 
                 {% if product.has_components %}
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono">
-                    🧪 {{ product.available_service_units }} disp.
+                    {{ product.available_service_units }} disp.
                 </span>
                 {% elif product.is_service %}
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                    ⚡ Servicio
+                    Servicio
                 </span>
                 {% else %}
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border font-mono {% if product.stock <= 5 %}bg-amber-50 text-amber-700 border-amber-200{% else %}bg-slate-100 text-slate-600 border-slate-200{% endif %}">
@@ -127,7 +127,7 @@
     {% endif %}
 {% empty %}
 <div class="text-center text-slate-400 py-12 bg-white rounded-xl border border-slate-100">
-    <div class="text-3xl mb-1.5">🔍</div>
+    <svg class="w-8 h-8 mx-auto mb-2 text-slate-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
     <p class="text-sm font-medium text-slate-500">No se encontraron productos coincidentes.</p>
     <p class="text-xs text-slate-400 mt-0.5">Intenta con otro término o escanea el código de barras.</p>
 </div>

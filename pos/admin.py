@@ -1,11 +1,17 @@
 from django.contrib import admin
-from .models import Product, ProductPriceHistory, Category, Client, Sale, SaleItem, Payment, PaymentAllocation
+from .models import Product, ProductPriceHistory, Category, Client, Sale, SaleItem, Payment, PaymentAllocation, Expense
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = ('id', 'name', 'barcode', 'cost_price', 'price', 'profit', 'stock')
     search_fields = ('name', 'barcode')
     list_filter = ('category',)
+
+@admin.register(Expense)
+class ExpenseAdmin(admin.ModelAdmin):
+    list_display = ('id', 'category', 'description', 'amount', 'date', 'user')
+    search_fields = ('description',)
+    list_filter = ('category', 'date')
 
 @admin.register(ProductPriceHistory)
 class ProductPriceHistoryAdmin(admin.ModelAdmin):

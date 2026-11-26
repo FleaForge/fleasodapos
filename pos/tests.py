@@ -3,7 +3,7 @@ from django.test import TestCase, Client as TestClient
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.utils import timezone
-from .models import Product, ProductPriceHistory, ProductComponent, Client, Sale, SaleItem, Payment
+from .models import Product, ProductPriceHistory, ProductComponent, Client, Sale, SaleItem, Payment, Expense
 
 class PriceAndProfitabilityTests(TestCase):
     def setUp(self):
@@ -971,6 +971,115 @@ class POSProductSearchTests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertContains(res, '3L ROJA')
         self.assertNotContains(res, 'Cuaderno Norma')
+
+
+class FinancialAndInventoryReportTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='report_user', password='password123')
+        self.client = TestClient()
+        self.client.login(username='report_user', password='password123')
+        self.customer = Client.objects.create(name='Empresa XYZ', phone='3001112233')
+
+    def test_expense_crud(self):
+        # 1. Add valid expense
+        res = self.client.post(reverse('add_expense'), {
+            'category': 'RENT',
+            'description': 'Arriendo Bodega Principal',
+            'amount': 250000,
+            'date': timezone.now().date().strftime('%Y-%m-%d'),
+            'date_start': timezone.now().date().strftime('%Y-%m-%d'),
+            'date_end': timezone.now().date().strftime('%Y-%m-%d'),
+        }, follow=True)
+        self.assertEqual(res.status_code, 200)
+        expense = Expense.objects.get(description='Arriendo Bodega Principal')
+        self.assertEqual(expense.amount, 250000)
+        self.assertEqual(expense.category, 'RENT')
+        self.assertIn('Arriendo Bodega Principal', str(expense))
+
+        # 1b. Add expense with empty description and amount=80000 (defaults to category name)
+        res_80k = self.client.post(reverse('add_expense'), {
+            'category': 'INTERNET',
+            'description': '',
+            'amount': 80000,
+        }, follow=True)
+        self.assertEqual(res_80k.status_code, 200)
+        exp_80k = Expense.objects.get(amount=80000)
+        self.assertEqual(exp_80k.category, 'INTERNET')
+        self.assertEqual(exp_80k.description, 'Internet, Telefonía & Software')
+
+        # 2. Validation: amount <= 0
+        res_invalid = self.client.post(reverse('add_expense'), {
+            'category': 'UTILITIES',
+            'description': 'Luz',
+            'amount': 0,
+        }, follow=True)
+        self.assertEqual(Expense.objects.filter(description='Luz').count(), 0)
+
+        # 3. Delete expense
+        res_del = self.client.post(reverse('delete_expense', kwargs={'expense_id': expense.id}), follow=True)
+        self.assertEqual(res_del.status_code, 200)
+        self.assertEqual(Expense.objects.filter(id=expense.id).count(), 0)
+
+    def test_report_financial_and_inventory_metrics(self):
+        # Setup products
+        # Product 1: In stock & sold
+        p_sold = Product.objects.create(name='Arroz Diana', barcode='111', cost_price=3000, price=4000, stock=20)
+        # Product 2: Out of stock (0)
+        p_out = Product.objects.create(name='Aceite Premier', barcode='222', cost_price=8000, price=10000, stock=0)
+        # Product 3: Critical stock (3)
+        p_crit = Product.objects.create(name='Atun Van Camps', barcode='333', cost_price=4500, price=6000, stock=3)
+
+        # Create Cash Sale ($4,000 cash, $3,000 cost)
+        sale_cash = Sale.objects.create(client=self.customer, payment_method='CASH', total=4000)
+        SaleItem.objects.create(sale=sale_cash, product=p_sold, quantity=1, cost_price=3000, price=4000)
+
+        # Create Credit Sale ($8,000 credit, $6,000 cost)
+        sale_credit = Sale.objects.create(client=self.customer, payment_method='CREDIT', total=8000)
+        SaleItem.objects.create(sale=sale_credit, product=p_sold, quantity=2, cost_price=3000, price=4000)
+
+        # Customer pays $3,000 towards credit
+        Payment.objects.create(client=self.customer, amount=3000, note='Abono parcial')
+
+        # Add fixed expense of $2,000
+        Expense.objects.create(category='UTILITIES', description='Internet Claro', amount=2000, user=self.user)
+
+        res = self.client.get(reverse('reports'))
+        self.assertEqual(res.status_code, 200)
+
+        # Test Net Profit calculations:
+        # Total Sales = 12,000. Total Cost = 9,000. Gross Profit = 3,000.
+        # Fixed Expenses = 2,000. Net Profit = 1,000.
+        self.assertEqual(res.context['total_period'], 12000)
+        self.assertEqual(res.context['total_cost_period'], 9000)
+        self.assertEqual(res.context['total_profit_period'], 3000)
+        self.assertEqual(res.context['total_expenses_period'], 2000)
+        self.assertEqual(res.context['net_profit_period'], 1000)
+
+        # Test Cash Flow:
+        # Cash In = Cash Sales (4,000) + Payments (3,000) = 7,000
+        # Cash Out = Cost of Goods (9,000) + Expenses (2,000) = 11,000
+        # Net Cash Flow = 7,000 - 11,000 = -4,000 (Deficit warning!)
+        self.assertEqual(res.context['total_cash_in'], 7000)
+        self.assertEqual(res.context['total_cash_out'], 11000)
+        self.assertEqual(res.context['net_cash_flow'], -4000)
+
+        # Test Inventory Metrics:
+        self.assertEqual(res.context['out_of_stock_count'], 1)
+        self.assertEqual(res.context['critical_stock_count'], 1)
+        self.assertEqual(res.context['total_active_products'], 3)
+        self.assertIn(p_out, res.context['out_of_stock_items'])
+        self.assertIn(p_crit, res.context['critical_stock_items'])
+
+        # Check rendered sections in HTML
+        self.assertContains(res, 'Rentabilidad & Márgenes, Gastos Operativos & Utilidad Neta')
+        self.assertContains(res, 'Flujo de Caja Real (Cash Flow)')
+        self.assertContains(res, 'Estado de Cartera & Recaudo')
+        self.assertContains(res, 'Salud del Inventario, Quiebres de Stock & Rotación')
+        self.assertContains(res, 'Quiebres de Stock')
+        self.assertContains(res, 'Aceite Premier')
+        self.assertContains(res, 'Atun Van Camps')
+        self.assertContains(res, 'Internet Claro')
+
 
 
 

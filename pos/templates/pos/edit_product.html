@@ -17,17 +17,17 @@
                     </span>
                     {% if not product.is_active %}
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-black bg-rose-100 text-rose-800 border border-rose-300">
-                        🚫 Dado de Baja / Inactivo
+                        <svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5l14 14M21 12a9 9 0 11-18 0 9 9 0 0118 0"/></svg> Dado de Baja / Inactivo
                     </span>
                     {% endif %}
                     {% if product.has_components %}
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                        🧪 Con Insumos ({{ product.available_service_units }} disp.)
+                        <svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3h6m-5 0v7l-6 9a1 1 0 001 2h14a1 1 0 001-2l-6-9V3M8 15h8"/></svg> Con Insumos ({{ product.available_service_units }} disp.)
                     </span>
                     {% endif %}
                     {% if product.is_service %}
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                        ⚡ Servicio
+                        <svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 3L4 14h7v7l9-11h-7V3z"/></svg> Servicio
                     </span>
                     {% endif %}
                     <span 
@@ -77,7 +77,7 @@
                             <img :src="imagePreview" alt="Foto del producto" class="w-full h-full object-cover">
                         </template>
                         <template x-if="!imagePreview || clearImage">
-                            <span class="text-3xl text-slate-300 select-none">📷</span>
+                            <span class="text-3xl text-slate-300 select-none"><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h4l2-3h4l2 3h4v13H4V7z M15 13a3 3 0 11-6 0 3 3 0 016 0"/></svg></span>
                         </template>
                     </div>
 
@@ -185,7 +185,7 @@
                     <div>
                         <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
                             <span class="w-6 h-6 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center text-xs">
-                                📊
+                                <svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 20h16M7 16v-4m5 4V5m5 11V9"/></svg>
                             </span>
                             <span>Fijación de Precios y Rentabilidad</span>
                         </h3>
@@ -243,7 +243,7 @@
                         <span class="text-[11px] text-slate-400 block truncate">Pagado al proveedor</span>
                         {% if product.has_components %}
                         <div class="mt-1.5 p-2 rounded-lg bg-indigo-50 border border-indigo-100 text-[11px] text-indigo-700 flex flex-col gap-0.5">
-                            <span class="font-bold">🧪 Insumos vinculados: ${{ product.components_cost|intcomma }} COP</span>
+                            <span class="font-bold"><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3h6m-5 0v7l-6 9a1 1 0 001 2h14a1 1 0 001-2l-6-9V3M8 15h8"/></svg> Insumos vinculados: ${{ product.components_cost|intcomma }} COP</span>
                             <span class="text-[10px] text-indigo-600">Al venderse, se usa este costo para la ganancia si dejas costo propio en $0.</span>
                         </div>
                         {% endif %}
@@ -427,7 +427,7 @@
                     {% if product.has_components %}
                     <div class="mt-1.5 p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-900 flex items-center justify-between gap-2 shadow-2xs">
                         <div>
-                            <span>🧪 <strong>Capacidad en POS:</strong> Calculada por insumos (<strong>{{ product.available_service_units }} disp.</strong>).</span>
+                            <span><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3h6m-5 0v7l-6 9a1 1 0 001 2h14a1 1 0 001-2l-6-9V3M8 15h8"/></svg> <strong>Capacidad en POS:</strong> Calculada por insumos (<strong>{{ product.available_service_units }} disp.</strong>).</span>
                             <span class="block text-[10px] text-indigo-600 mt-0.5">El POS solo permitirá vender las unidades que cubran tus insumos.</span>
                         </div>
                         {% if product.stock > 0 %}
@@ -480,9 +480,9 @@
                 <div class="flex-1">
                     <label for="is_service" class="text-xs font-bold uppercase tracking-wider text-slate-800 cursor-pointer block">
                         {% if product.has_components %}
-                        🧪 Servicio con Receta de Insumos (Venta limitada al stock de insumos)
+                        <svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3h6m-5 0v7l-6 9a1 1 0 001 2h14a1 1 0 001-2l-6-9V3M8 15h8"/></svg> Servicio con Receta de Insumos (Venta limitada al stock de insumos)
                         {% else %}
-                        ⚡ Marcar como Servicio / Impresión (Disponibilidad calculada por insumos o ilimitada)
+                        <svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 3L4 14h7v7l9-11h-7V3z"/></svg> Marcar como Servicio / Impresión (Disponibilidad calculada por insumos o ilimitada)
                         {% endif %}
                     </label>
                     <p class="text-xs text-slate-500 mt-0.5">
@@ -500,7 +500,7 @@
             <!-- Alerta y Corrección Directa de Stock Residual en Servicio -->
             <div class="p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 shadow-2xs">
                 <div class="flex items-start gap-2.5">
-                    <span class="text-base shrink-0">⚠️</span>
+                    <span class="text-base shrink-0"><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v5m0 3h.01M10 3L2 19h20L14 3h-4z"/></svg></span>
                     <div>
                         <strong class="font-bold">Stock ficticio detectado: {{ product.stock }} unidades</strong>
                         <p class="text-amber-700 text-[11px] mt-0.5">
@@ -511,7 +511,7 @@
                 <button type="button" 
                         @click="stock = 0"
                         class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-xs whitespace-nowrap active:scale-95 transition flex items-center justify-center gap-1.5">
-                    <span>⚡</span>
+                    <span><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 3L4 14h7v7l9-11h-7V3z"/></svg></span>
                     <span>Poner Stock en 0</span>
                 </button>
             </div>
@@ -558,9 +558,9 @@
                     <div class="flex items-center gap-2 flex-wrap">
                         <span class="text-sm font-black {% if not product.is_active %}text-rose-800{% else %}text-slate-800{% endif %}">
                             {% if product.is_active %}
-                            📦 Estado: Activo en Venta
+                            <svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l9 5v9l-9 5-9-5V8l9-5z M3 8l9 5 9-5M12 13v9M7 5l9 5"/></svg> Estado: Activo en Venta
                             {% else %}
-                            🚫 Estado: Dado de Baja (Inactivo)
+                            <svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5l14 14M21 12a9 9 0 11-18 0 9 9 0 0118 0"/></svg> Estado: Dado de Baja (Inactivo)
                             {% endif %}
                         </span>
                         <span class="text-xs px-2.5 py-0.5 rounded-full font-bold {% if product.is_active %}bg-emerald-100 text-emerald-800{% else %}bg-rose-100 text-rose-800{% endif %}">
@@ -594,7 +594,7 @@
                         {% else %}
                         <span class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-200/80 text-slate-500 font-bold text-xs" 
                               title="El producto debe estar en stock 0 para poder darse de baja">
-                            <span>🔒 Stock activo ({{ product.stock }})</span>
+                            <span><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 10V7a5 5 0 0110 0v3M5 10h14v11H5V10z"/></svg> Stock activo ({{ product.stock }})</span>
                         </span>
                         {% endif %}
                     {% else %}
@@ -640,12 +640,12 @@
     </div>
 
     <!-- SECCIÓN: INSUMOS Y RECETA DE CONSUMO (ESCANDALLO) -->
-    <div id="receta" class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div id="receta" class="relative z-20 bg-white rounded-2xl shadow-sm border border-slate-200">
         <!-- Header -->
         <div class="p-5 sm:p-6 border-b border-slate-100 bg-gradient-to-r from-indigo-50/70 via-slate-50 to-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg shadow-2xs shrink-0">
-                    🧪
+                    <svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3h6m-5 0v7l-6 9a1 1 0 001 2h14a1 1 0 001-2l-6-9V3M8 15h8"/></svg>
                 </div>
                 <div>
                     <div class="flex items-center gap-2">
@@ -743,7 +743,7 @@
             <!-- Resumen de Margen Real del Servicio -->
             <div class="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50/70 to-indigo-50/70 border border-emerald-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
                 <div class="flex items-center gap-2">
-                    <span class="text-lg">✨</span>
+                    <span class="text-lg"><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l3 6 6 3-6 3-3 6-3-6-6-3 6-3 3-6z"/></svg></span>
                     <div>
                         <span class="font-bold text-slate-800 block">Rentabilidad Real Calculada:</span>
                         <span class="text-slate-600">
@@ -762,7 +762,7 @@
             {% else %}
             <!-- Estado vacío cuando no hay insumos -->
             <div class="p-6 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50">
-                <div class="text-2xl mb-1.5">📦</div>
+                <div class="text-2xl mb-1.5"><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l9 5v9l-9 5-9-5V8l9-5z M3 8l9 5 9-5M12 13v9M7 5l9 5"/></svg></div>
                 <h4 class="text-xs sm:text-sm font-bold text-slate-700">Sin insumos vinculados actualmente</h4>
                 <p class="text-[11px] sm:text-xs text-slate-400 max-w-md mx-auto mt-0.5">
                     Este producto se descuenta de su propio stock individual. Si es un servicio de impresión o preparación que gasta materiales (papel fotográfico, vasos, tinta, etc.), selecciónalos abajo para que resten stock automáticamente al vender.
@@ -777,7 +777,7 @@
 
                 <div class="flex items-center justify-between mb-2.5 flex-wrap gap-2">
                     <h4 class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                        <span>➕ Vincular Insumo a la Receta</span>
+                        <span><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/></svg> Vincular Insumo a la Receta</span>
                     </h4>
                     <span class="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
                         <span x-text="items.length"></span> insumos disponibles
@@ -794,8 +794,8 @@
                     <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
                         
                         <!-- Buscador Inteligente con Autocompletado / Dropdown -->
-                        <div class="sm:col-span-7 space-y-1 relative">
-                            <div class="flex items-center justify-between">
+                        <div class="sm:col-span-7 min-w-0 space-y-1 relative">
+                            <div class="flex flex-wrap items-center justify-between gap-1">
                                 <label class="block text-xs font-bold text-slate-700">
                                     Seleccionar Insumo del Inventario:
                                 </label>
@@ -859,17 +859,17 @@
                                              :class="highlightedIndex === idx ? 'bg-indigo-50/80 text-indigo-900 border-l-4 border-indigo-600' : 'hover:bg-slate-50 text-slate-700'"
                                              class="p-2.5 sm:p-3 cursor-pointer transition-colors border-l-4 border-transparent flex flex-col gap-1">
                                             <div class="flex items-center justify-between gap-2">
-                                                <span class="font-bold text-xs" x-text="item.name"></span>
+                                                <span class="min-w-0 break-words font-bold text-xs" x-text="item.name"></span>
                                                 <template x-if="item.barcode">
                                                     <span class="shrink-0 text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
-                                                        🏷️ <span x-text="item.barcode"></span>
+                                                        <svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3h8l10 10-8 8L3 11V3z M7 7h.01"/></svg> <span x-text="item.barcode"></span>
                                                     </span>
                                                 </template>
                                             </div>
                                             <div class="flex items-center gap-2.5 text-[11px] flex-wrap">
                                                 <span :class="item.stock <= 0 ? 'text-rose-600 font-bold' : (item.stock <= 5 ? 'text-amber-600 font-bold' : 'text-emerald-700 font-bold')"
                                                       class="flex items-center gap-1">
-                                                    📦 Stock: <span x-text="item.stock"></span> disp.
+                                                    <svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l9 5v9l-9 5-9-5V8l9-5z M3 8l9 5 9-5M12 13v9M7 5l9 5"/></svg> Stock: <span x-text="item.stock"></span> disp.
                                                 </span>
                                                 <span class="text-slate-300">|</span>
                                                 <span class="text-slate-500 font-mono">
@@ -886,7 +886,7 @@
 
                                     <!-- Sin Resultados -->
                                     <div x-show="filteredItems.length === 0" class="p-6 text-center text-xs text-slate-500">
-                                        <div class="text-xl mb-1">🔍</div>
+                                        <div class="text-xl mb-1"><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/></svg></div>
                                         <p class="font-bold text-slate-700">No encontramos ningún insumo con "<span x-text="searchQuery"></span>"</p>
                                         <p class="text-[11px] text-slate-400 mt-0.5">Verifica si el nombre o código de barras está bien escrito.</p>
                                     </div>
@@ -899,17 +899,17 @@
                                  class="p-2.5 sm:p-3 bg-gradient-to-r from-indigo-50/90 to-purple-50/70 rounded-xl border border-indigo-200 flex items-center justify-between gap-3 shadow-2xs">
                                 <div class="min-w-0 flex-1">
                                     <div class="flex items-center gap-1.5">
-                                        <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white text-xs font-bold">✓</span>
+                                        <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white text-xs font-bold"><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12l4 4L19 6"/></svg></span>
                                         <h5 class="text-xs sm:text-sm font-black text-indigo-950 truncate" x-text="selectedSupply ? selectedSupply.name : ''"></h5>
                                     </div>
                                     <div class="flex items-center gap-2 mt-1 text-[11px] text-indigo-800 flex-wrap">
                                         <template x-if="selectedSupply && selectedSupply.barcode">
                                             <span class="font-mono bg-white/90 px-1.5 py-0.5 rounded border border-indigo-200 text-[10px] font-bold text-slate-700">
-                                                🏷️ <span x-text="selectedSupply.barcode"></span>
+                                                <svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3h8l10 10-8 8L3 11V3z M7 7h.01"/></svg> <span x-text="selectedSupply.barcode"></span>
                                             </span>
                                         </template>
                                         <span class="font-bold" :class="selectedSupply && selectedSupply.stock <= 0 ? 'text-rose-600' : 'text-emerald-700'">
-                                            📦 Stock actual: <span x-text="selectedSupply ? selectedSupply.stock : 0"></span> disp.
+                                            <svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l9 5v9l-9 5-9-5V8l9-5z M3 8l9 5 9-5M12 13v9M7 5l9 5"/></svg> Stock actual: <span x-text="selectedSupply ? selectedSupply.stock : 0"></span> disp.
                                         </span>
                                         <span class="text-indigo-300">·</span>
                                         <span class="font-mono font-bold text-slate-700">
@@ -921,7 +921,7 @@
                                         @click="clearSelection()"
                                         class="shrink-0 px-2.5 py-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-white hover:bg-indigo-50 rounded-lg border border-indigo-200 transition shadow-2xs active:scale-95 flex items-center gap-1">
                                     <span>Cambiar</span>
-                                    <span class="text-indigo-400">✕</span>
+                                    <span class="text-indigo-400"><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M6 18L18 6"/></svg></span>
                                 </button>
                             </div>
                         </div>
@@ -948,7 +948,7 @@
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                                 </svg>
-                                <span>+ Vincular Insumo</span>
+                                <span>Vincular Insumo</span>
                             </button>
                         </div>
                     </div>
@@ -957,7 +957,7 @@
                     <div x-show="errorMessage" 
                          x-transition
                          class="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-3 py-2 rounded-xl flex items-center gap-1.5">
-                        <span>⚠️</span>
+                        <span><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v5m0 3h.01M10 3L2 19h20L14 3h-4z"/></svg></span>
                         <span x-text="errorMessage"></span>
                     </div>
                 </form>
@@ -1007,7 +1007,7 @@
                             <div class="flex items-center gap-1">
                                 {% if h.old_cost_price != h.new_cost_price %}
                                 <span class="text-slate-400 line-through text-xs">${{ h.old_cost_price|intcomma }}</span>
-                                <span class="text-slate-400 text-xs">➔</span>
+                                <span class="text-slate-400 text-xs"><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 12h16m-6-6l6 6-6 6"/></svg></span>
                                 {% endif %}
                                 <span class="font-bold text-slate-800">${{ h.new_cost_price|intcomma }}</span>
                             </div>
@@ -1021,7 +1021,7 @@
                             <div class="flex items-center gap-1">
                                 {% if h.old_price != h.new_price %}
                                 <span class="text-slate-400 line-through text-xs">${{ h.old_price|intcomma }}</span>
-                                <span class="text-slate-400 text-xs">➔</span>
+                                <span class="text-slate-400 text-xs"><svg class="inline-block w-4 h-4 shrink-0 align-middle" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 12h16m-6-6l6 6-6 6"/></svg></span>
                                 {% endif %}
                                 <span class="font-bold text-brand-600">${{ h.new_price|intcomma }}</span>
                             </div>

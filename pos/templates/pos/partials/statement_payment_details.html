@@ -1,0 +1,40 @@
+{% load humanize %}
+{% if sale.amount_paid > 0 %}
+<details class="group rounded-xl border border-emerald-200 bg-emerald-50/60">
+  <summary class="min-h-11 cursor-pointer px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-emerald-900 list-none">
+    <span class="inline-flex items-center gap-2">
+      <svg class="w-4 h-4 shrink-0" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h3M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"/></svg>
+      Ver abonos aplicados
+    </span>
+    <span class="inline-flex items-center gap-2 whitespace-nowrap">
+      {% widthratio sale.amount_paid sale.total 100 %}% pagado
+      <svg class="w-4 h-4 transition-transform group-open:rotate-180" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </span>
+  </summary>
+  <div class="px-3 pb-3 space-y-2">
+    <div class="h-1.5 rounded-full bg-emerald-100 overflow-hidden"><div class="h-full bg-emerald-500 rounded-full" style="width: {% widthratio sale.amount_paid sale.total 100 %}%;"></div></div>
+    {% for alloc in sale.allocations.all %}
+    {% if not alloc.payment.is_annulled %}
+    <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-white p-3">
+      <div class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <strong class="text-emerald-700 whitespace-nowrap">+${{ alloc.amount|intcomma }}</strong>
+          <span class="text-xs font-semibold text-slate-600 whitespace-nowrap">Recibo #{{ alloc.payment.id }}</span>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">{{ alloc.payment.date|date:"d/m/Y · H:i" }}</p>
+      </div>
+      {% if not is_public %}
+      <form action="{% url 'annul_payment' alloc.payment.id %}" method="POST" class="shrink-0 no-print" onsubmit="return confirm('¿Está seguro de anular el recibo #{{ alloc.payment.id }} por ${{ alloc.payment.amount|intcomma }}? Se anula el recibo completo y se reactivan los saldos que cubría.');">
+        {% csrf_token %}
+        <button type="submit" class="min-h-11 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-rose-200 bg-white px-3 text-xs font-bold text-rose-700 hover:bg-rose-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-600" aria-label="Anular recibo #{{ alloc.payment.id }} completo">
+          <svg class="w-4 h-4 shrink-0" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M6 18L18 6"/></svg>
+          Anular recibo
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+</details>
+{% endif %}

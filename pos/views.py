@@ -1,11 +1,12 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
+from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Sum, Q, F, Count
 from django.utils import timezone
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
-from .models import Product, ProductPriceHistory, Client, Sale, SaleItem, Payment, ProductComponent, PaymentAllocation
+from .models import Product, ProductPriceHistory, Client, Sale, SaleItem, Payment, ProductComponent, PaymentAllocation, Expense
 from django.template.loader import get_template, render_to_string
 from xhtml2pdf import pisa
 import json
@@ -223,15 +224,11 @@ def clients(request):
     return render(request, 'pos/clients.html', {'clients': clients_list})
 
 def reconcile_client_allocations(client):
-    """
-    Conciliación automática estricta FIFO (First-In, First-Out) de cartera:
-    Distribuye todos los pagos activos (no anulados) del cliente sobre
-    sus ventas a crédito activas (no anuladas), desde la más antigua a la más nueva.
-    Garantiza que:
-    1. Si client.balance <= 0, todas las facturas a crédito quedan saldadas con pending_balance == 0.
-    2. Las facturas más antiguas se liquidan al 100% antes de abonar a las siguientes.
-    3. Ninguna factura queda con saldo pendiente ficticio si existen pagos registrados.
-    4. La suma de pending_balance de todas las facturas coincide exactamente con client.balance (cuando balance > 0).
+    """Aplica primero los abonos vinculados a su venta y el resto por FIFO.
+
+    Los pagos de cartera generales cubren las deudas más antiguas. Un abono
+    recibido al vender se reserva para esa factura mientras siga activa y sea
+    del mismo cliente; cualquier excedente se distribuye por FIFO.
     """
     from .models import Sale, Payment, PaymentAllocation
     from django.db import transaction
@@ -252,15 +249,23 @@ def reconcile_client_allocations(client):
         PaymentAllocation.objects.filter(sale__client=client).delete()
         PaymentAllocation.objects.filter(payment__client=client).delete()
 
-        if not credit_sales or not payments:
-            return
-
         sale_pending = {s.id: s.total for s in credit_sales}
+        payment_remaining = {p.id: p.amount for p in payments}
+        for payment in payments:
+            if payment.sale_id in sale_pending:
+                allocated = min(payment.amount, sale_pending[payment.sale_id])
+                if allocated > 0:
+                    PaymentAllocation.objects.create(
+                        payment=payment, sale_id=payment.sale_id, amount=allocated
+                    )
+                    sale_pending[payment.sale_id] -= allocated
+                    payment_remaining[payment.id] -= allocated
+
         sale_idx = 0
         num_sales = len(credit_sales)
 
         for payment in payments:
-            payment_rem = payment.amount
+            payment_rem = payment_remaining[payment.id]
             while payment_rem > 0 and sale_idx < num_sales:
                 current_sale = credit_sales[sale_idx]
                 needed = sale_pending[current_sale.id]
@@ -280,6 +285,12 @@ def reconcile_client_allocations(client):
 
                 if sale_pending[current_sale.id] <= 0:
                     sale_idx += 1
+
+        for sale in credit_sales:
+            is_paid = sale_pending[sale.id] <= 0
+            if sale.is_paid != is_paid:
+                sale.is_paid = is_paid
+                sale.save(update_fields=['is_paid'])
 
 def consolidate_client_debt_after_payment(client, source_payment):
     """
@@ -470,6 +481,7 @@ def client_statement(request, client_id):
         'history_timeline': history_timeline,
         'previous_balance': previous_balance,
         'pending_sales': pending_sales,
+        'pending_sales_page': Paginator(pending_sales, 25).get_page(request.GET.get('accounts_page')),
         'recent_payments': recent_payments,
         'total_credit': active_credit,
         'total_paid': active_paid,
@@ -521,6 +533,7 @@ def client_public_statement(request, client_id):
         'timeline': active_timeline,
         'previous_balance': previous_balance,
         'pending_sales': pending_sales,
+        'pending_sales_page': Paginator(pending_sales, 25).get_page(request.GET.get('accounts_page')),
         'recent_payments': recent_payments,
         'total_credit': active_credit,
         'total_paid': active_paid,
@@ -842,6 +855,7 @@ def clear_cart(request):
     return response
 
 @login_required
+@transaction.atomic
 def checkout(request):
     if request.method == 'POST':
         client_id = request.POST.get('client_id')
@@ -861,6 +875,21 @@ def checkout(request):
         # Recalculate total just to be safe
         total = sum(item['price'] * item['quantity'] for item in cart.values())
         
+        if payment_method not in dict(Sale.PAYMENT_METHODS):
+            messages.error(request, 'La forma de pago no es válida.')
+            return redirect('pos')
+        try:
+            initial_payment = int(request.POST.get('initial_payment') or 0)
+        except (ValueError, TypeError):
+            messages.error(request, 'El abono inicial debe ser un valor entero en pesos.')
+            return redirect('pos')
+        if initial_payment < 0 or initial_payment > total:
+            messages.error(request, 'El abono inicial debe estar entre cero y el total de la venta.')
+            return redirect('pos')
+        if initial_payment and payment_method != 'CREDIT':
+            messages.error(request, 'El abono inicial solo aplica a ventas a crédito.')
+            return redirect('pos')
+
         # Custom Date Handling
         created_at_str = request.POST.get('created_at')
         sale_date = timezone.now()
@@ -907,8 +936,23 @@ def checkout(request):
             # Update stock (deducts components if product has recipe/supplies, or direct stock)
             product.deduct_stock(item['quantity'])
             
+        if payment_method == 'CREDIT':
+            if initial_payment:
+                payment = Payment.objects.create(
+                    client=client, sale=sale, amount=initial_payment,
+                    note=f'Abono inicial de venta #{sale.id}'
+                )
+                # El recaudo corresponde al día elegido para la venta.
+                Payment.objects.filter(pk=payment.pk).update(date=sale_date)
+            reconcile_client_allocations(client)
+            sale.refresh_from_db()
+
         request.session['cart'] = {}
-        messages.success(request, f'Venta #{sale.id} registrada correctamente')
+        if payment_method == 'CREDIT':
+            messages.success(request, f'Venta #{sale.id} registrada. Total: ${total:,}. '
+                             f'Abono inicial: ${initial_payment:,}. Saldo pendiente: ${sale.pending_balance:,}.')
+        else:
+            messages.success(request, f'Venta #{sale.id} registrada correctamente')
         return redirect('pos')
         
     return redirect('pos')
@@ -933,15 +977,16 @@ def check_barcode(request):
         return HttpResponse(
             f'<div class="mt-1.5 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 shadow-2xs animate-pulse">'
             f'  <div class="flex items-center gap-1.5">'
-            f'    <span class="text-rose-500 text-sm">⚠️</span>'
+            f'    <svg class="w-4 h-4 text-rose-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>'
             f'    <span>Ya asignado a: <strong>{existing.name}</strong> (Stock: {existing.stock})</span>'
             f'  </div>'
-            f'  <a href="/inventory/edit/{existing.id}/" class="inline-flex items-center gap-1 text-[11px] font-black text-rose-800 hover:text-rose-950 underline self-start sm:self-auto">Ver / Editar producto ➔</a>'
+            f'  <a href="/inventory/edit/{existing.id}/" class="inline-flex items-center gap-1 text-[11px] font-black text-rose-800 hover:text-rose-950 underline self-start sm:self-auto">Ver / Editar producto</a>'
             f'</div>'
         )
     return HttpResponse(
-        '<div class="mt-1.5 text-[11px] font-bold text-emerald-600 flex items-center gap-1">'
-        '  <span>✓ Código de barras disponible</span>'
+        '<div class="mt-1.5 text-[11px] font-bold text-emerald-600 flex items-center gap-1.5">'
+        '  <svg class="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>'
+        '  <span>Código de barras disponible</span>'
         '</div>'
     )
 
@@ -1147,7 +1192,7 @@ def report_analytics(request):
     )
 
     # Invoices query for listing / searching (includes sales & adjustments)
-    sales_qs = Sale.objects.all().select_related('client').prefetch_related('items__product')
+    sales_qs = Sale.objects.all().select_related('client').prefetch_related('items__product', 'allocations__payment')
 
     # Apply Client Filter if selected
     if selected_client:
@@ -1308,6 +1353,122 @@ def report_analytics(request):
             tc['current_balance'] = cl.balance if cl else 0
             top_clients.append(tc)
 
+    # =========================================================
+    # 5. GASTOS OPERATIVOS & UTILIDAD NETA REAL
+    # =========================================================
+    expenses_qs = Expense.objects.filter(date__date__gte=date_start, date__date__lte=date_end)
+    total_expenses_period = expenses_qs.aggregate(Sum('amount'))['amount__sum'] or 0
+    net_profit_period = total_profit_period - total_expenses_period
+    margin_net_pct = round((net_profit_period / total_period * 100), 1) if total_period > 0 else 0.0
+
+    expenses_by_category = []
+    for cat_code, cat_name in Expense.CATEGORY_CHOICES:
+        cat_amount = expenses_qs.filter(category=cat_code).aggregate(Sum('amount'))['amount__sum'] or 0
+        if cat_amount > 0 or total_expenses_period == 0:
+            pct = round((cat_amount / total_expenses_period * 100), 1) if total_expenses_period > 0 else 0.0
+            expenses_by_category.append({
+                'code': cat_code,
+                'name': cat_name,
+                'amount': cat_amount,
+                'pct': pct,
+            })
+    expenses_by_category.sort(key=lambda x: x['amount'], reverse=True)
+    recent_expenses = list(expenses_qs.select_related('user').order_by('-date')[:15])
+
+    # =========================================================
+    # 6. SEGUIMIENTO DE CARTERA (CRÉDITO VS. RECAUDO)
+    # =========================================================
+    period_payments = Payment.objects.filter(
+        date__date__gte=date_start,
+        date__date__lte=date_end,
+        is_annulled=False
+    )
+    if selected_client:
+        period_payments = period_payments.filter(client=selected_client)
+    total_collected_period = period_payments.aggregate(Sum('amount'))['amount__sum'] or 0
+    collection_rate_pct = round((total_collected_period / credit_total * 100), 1) if credit_total > 0 else 0.0
+
+    all_pending_credit_sales = Sale.objects.filter(
+        payment_method='CREDIT',
+        is_annulled=False
+    ).prefetch_related('allocations__payment')
+    if selected_client:
+        all_pending_credit_sales = all_pending_credit_sales.filter(client=selected_client)
+
+    portfolio_current_amount = 0     # <= 30 días
+    portfolio_current_count = 0
+    portfolio_overdue_30_amount = 0  # 31 a 60 días
+    portfolio_overdue_30_count = 0
+    portfolio_overdue_60_amount = 0  # > 60 días
+    portfolio_overdue_60_count = 0
+
+    for s in all_pending_credit_sales:
+        bal = s.pending_balance
+        if bal > 0:
+            age_days = (today - timezone.localtime(s.date).date()).days
+            if age_days <= 30:
+                portfolio_current_amount += bal
+                portfolio_current_count += 1
+            elif age_days <= 60:
+                portfolio_overdue_30_amount += bal
+                portfolio_overdue_30_count += 1
+            else:
+                portfolio_overdue_60_amount += bal
+                portfolio_overdue_60_count += 1
+
+    portfolio_overdue_total = portfolio_overdue_30_amount + portfolio_overdue_60_amount
+    portfolio_total_pending = portfolio_current_amount + portfolio_overdue_total
+    overdue_ratio_pct = round((portfolio_overdue_total / portfolio_total_pending * 100), 1) if portfolio_total_pending > 0 else 0.0
+
+    if portfolio_total_pending == 0:
+        portfolio_risk_level = 'SIN DEUDA'
+        portfolio_risk_color = 'emerald'
+        portfolio_risk_text = 'Excelente: Cartera en cero, sin cuentas pendientes de cobro.'
+    elif overdue_ratio_pct <= 15:
+        portfolio_risk_level = 'BAJO'
+        portfolio_risk_color = 'emerald'
+        portfolio_risk_text = 'Cartera sana. El 85%+ de la deuda se encuentra dentro del plazo comercial habitual (<= 30 días).'
+    elif overdue_ratio_pct <= 35:
+        portfolio_risk_level = 'MODERADO'
+        portfolio_risk_color = 'amber'
+        portfolio_risk_text = 'Atención preventiva: Entre el 15% y 35% de la deuda supera los 30 días. Conviene activar cobros preventivos.'
+    else:
+        portfolio_risk_level = 'ALTO / CRÍTICO'
+        portfolio_risk_color = 'rose'
+        portfolio_risk_text = 'Alerta de liquidez: Más del 35% de la cartera está vencida (> 30 días). Riesgo inminente de pérdidas por incobrables.'
+
+    # =========================================================
+    # 7. FLUJO DE CAJA REAL (CASH FLOW OPERATIVO)
+    # =========================================================
+    total_cash_in = cash_total + total_collected_period
+    total_cash_out = total_cost_period + total_expenses_period
+    net_cash_flow = total_cash_in - total_cash_out
+    credit_share_pct = round((credit_total / total_period * 100), 1) if total_period > 0 else 0.0
+    cash_share_pct = round((cash_total / total_period * 100), 1) if total_period > 0 else 0.0
+
+    # =========================================================
+    # 8. INVENTARIO & QUIEBRES DE STOCK
+    # =========================================================
+    active_products_qs = Product.objects.filter(is_active=True, is_service=False)
+    total_active_products = active_products_qs.count()
+
+    out_of_stock_qs = active_products_qs.filter(stock__lte=0)
+    out_of_stock_count = out_of_stock_qs.count()
+    out_of_stock_items = list(out_of_stock_qs.order_by('name')[:8])
+
+    critical_stock_qs = active_products_qs.filter(stock__gt=0, stock__lte=5)
+    critical_stock_count = critical_stock_qs.count()
+    critical_stock_items = list(critical_stock_qs.order_by('stock', 'name')[:8])
+
+    inventory_cost_valuation = sum(p.cost_valuation for p in active_products_qs)
+    inventory_sale_valuation = sum(p.sale_valuation for p in active_products_qs)
+    inventory_potential_profit = sum(p.profit_valuation for p in active_products_qs)
+
+    sold_product_ids = set(period_items.values_list('product_id', flat=True))
+    sold_active_count = len(sold_product_ids)
+    inventory_rotation_rate = round((sold_active_count / total_active_products * 100), 1) if total_active_products > 0 else 0.0
+    stagnant_count = active_products_qs.filter(stock__gt=0).exclude(id__in=sold_product_ids).count()
+
     context = {
         'all_clients': all_clients,
         'selected_client': selected_client,
@@ -1327,6 +1488,8 @@ def report_analytics(request):
         'avg_ticket': avg_ticket,
         'cash_total': cash_total,
         'credit_total': credit_total,
+        'credit_share_pct': credit_share_pct,
+        'cash_share_pct': cash_share_pct,
         'adjustments_total': adjustments_total,
         'annulled_period': annulled_period_count,
         # Rentabilidad y Métricas Financieras
@@ -1337,12 +1500,128 @@ def report_analytics(request):
         'avg_profit_per_ticket': avg_profit_per_ticket,
         'top_profitable_products': top_profitable_products,
         'star_product': star_product,
+        # Gastos Operativos & Utilidad Neta Real
+        'total_expenses_period': total_expenses_period,
+        'net_profit_period': net_profit_period,
+        'margin_net_pct': margin_net_pct,
+        'expenses_by_category': expenses_by_category,
+        'recent_expenses': recent_expenses,
+        'expense_categories': Expense.CATEGORY_CHOICES,
+        # Cartera & Recaudo
+        'total_collected_period': total_collected_period,
+        'collection_rate_pct': collection_rate_pct,
+        'portfolio_current_amount': portfolio_current_amount,
+        'portfolio_current_count': portfolio_current_count,
+        'portfolio_overdue_30_amount': portfolio_overdue_30_amount,
+        'portfolio_overdue_30_count': portfolio_overdue_30_count,
+        'portfolio_overdue_60_amount': portfolio_overdue_60_amount,
+        'portfolio_overdue_60_count': portfolio_overdue_60_count,
+        'portfolio_overdue_total': portfolio_overdue_total,
+        'portfolio_total_pending': portfolio_total_pending,
+        'overdue_ratio_pct': overdue_ratio_pct,
+        'portfolio_risk_level': portfolio_risk_level,
+        'portfolio_risk_color': portfolio_risk_color,
+        'portfolio_risk_text': portfolio_risk_text,
+        # Flujo de Caja Real
+        'total_cash_in': total_cash_in,
+        'total_cash_out': total_cash_out,
+        'net_cash_flow': net_cash_flow,
+        # Inventario & Quiebres de Stock
+        'total_active_products': total_active_products,
+        'out_of_stock_count': out_of_stock_count,
+        'out_of_stock_items': out_of_stock_items,
+        'critical_stock_count': critical_stock_count,
+        'critical_stock_items': critical_stock_items,
+        'inventory_cost_valuation': inventory_cost_valuation,
+        'inventory_sale_valuation': inventory_sale_valuation,
+        'inventory_potential_profit': inventory_potential_profit,
+        'inventory_rotation_rate': inventory_rotation_rate,
+        'stagnant_count': stagnant_count,
         'search_query': search_query,
         'status_filter': status_filter,
         'method_filter': method_filter,
         'filter_dates_with_search': request.GET.get('filter_dates_with_search', ''),
     }
     return render(request, 'pos/reports.html', context)
+
+@login_required
+def add_expense(request):
+    """Registra un nuevo gasto fijo u operativo del negocio"""
+    if request.method == 'POST':
+        category = request.POST.get('category', 'OTHER')
+        description = request.POST.get('description', '').strip()
+        if not description:
+            category_dict = dict(Expense.CATEGORY_CHOICES)
+            description = category_dict.get(category, 'Gasto operativo')
+
+        try:
+            amount = int(request.POST.get('amount', 0))
+        except (ValueError, TypeError):
+            amount = 0
+
+        date_str = request.POST.get('date', '').strip()
+        if date_str:
+            try:
+                date_val = timezone.datetime.strptime(date_str, '%Y-%m-%d').date()
+                dt = timezone.make_aware(timezone.datetime.combine(date_val, timezone.datetime.now().time()))
+            except ValueError:
+                dt = timezone.now()
+        else:
+            dt = timezone.now()
+
+        if amount <= 0:
+            messages.error(request, 'El monto del gasto debe ser mayor a 0.')
+        elif not description:
+            messages.error(request, 'Debes ingresar un concepto o descripción para el gasto.')
+        else:
+            Expense.objects.create(
+                category=category,
+                description=description,
+                amount=amount,
+                date=dt,
+                user=request.user
+            )
+            messages.success(request, f'Gasto registrado correctamente: {description} (${amount:,})')
+
+    date_start = request.POST.get('date_start', '')
+    date_end = request.POST.get('date_end', '')
+    client_id = request.POST.get('client_id', '')
+    redirect_url = reverse('reports')
+    params = []
+    if client_id:
+        params.append(f"client_id={client_id}")
+    if date_start:
+        params.append(f"date_start={date_start}")
+    if date_end:
+        params.append(f"date_end={date_end}")
+    if params:
+        redirect_url += '?' + '&'.join(params)
+    return redirect(redirect_url)
+
+@login_required
+def delete_expense(request, expense_id):
+    """Elimina o anula un gasto operativo registrado por error"""
+    if request.method == 'POST':
+        expense = get_object_or_404(Expense, id=expense_id)
+        desc = expense.description
+        amt = expense.amount
+        expense.delete()
+        messages.success(request, f'Gasto eliminado: {desc} (${amt:,})')
+
+    date_start = request.POST.get('date_start', request.GET.get('date_start', ''))
+    date_end = request.POST.get('date_end', request.GET.get('date_end', ''))
+    client_id = request.POST.get('client_id', request.GET.get('client_id', ''))
+    redirect_url = reverse('reports')
+    params = []
+    if client_id:
+        params.append(f"client_id={client_id}")
+    if date_start:
+        params.append(f"date_start={date_start}")
+    if date_end:
+        params.append(f"date_end={date_end}")
+    if params:
+        redirect_url += '?' + '&'.join(params)
+    return redirect(redirect_url)
 
 @login_required
 def invoice_detail(request, sale_id):
@@ -1553,9 +1832,9 @@ def edit_product(request, product_id):
             if not reason:
                 parts = []
                 if old_price != new_price:
-                    parts.append(f"Venta: ${old_price:,} ➔ ${new_price:,}")
+                    parts.append(f"Venta: ${old_price:,} -> ${new_price:,}")
                 if old_cost_price != new_cost_price:
-                    parts.append(f"Costo: ${old_cost_price:,} ➔ ${new_cost_price:,}")
+                    parts.append(f"Costo: ${old_cost_price:,} -> ${new_cost_price:,}")
                 reason = "Actualización de precios (" + ", ".join(parts) + ")"
                 
             ProductPriceHistory.objects.create(

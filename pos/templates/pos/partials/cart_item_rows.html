@@ -32,7 +32,7 @@
             <button type="button" class="text-[11px] font-semibold text-rose-500 hover:text-rose-700 mt-0.5 active:scale-95"
                 hx-post="{% url 'update_cart_item' %}"
                 hx-vals='{"product_id": "{{ item.id }}", "action": "remove"}' hx-target="#cart-items">
-                ✕ Quitar
+                Quitar
             </button>
         </div>
     </div>
@@ -47,7 +47,7 @@
 </div>
 {% else %}
 <div class="text-center text-slate-400 py-10 flex flex-col items-center">
-    <span class="text-4xl mb-2">🛒</span>
+    <svg class="w-10 h-10 mb-2 text-slate-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
     <span class="text-sm font-medium">Carrito vacío</span>
     <span class="text-xs text-slate-400 mt-1">Busca o escanea artículos para agregar</span>
 </div>

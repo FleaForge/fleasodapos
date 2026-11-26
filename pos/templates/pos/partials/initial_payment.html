@@ -1,0 +1,14 @@
+<div x-show="paymentMethod === 'CREDIT'" style="display: none;" class="p-3 rounded-lg border border-amber-200 bg-amber-50 space-y-2">
+  <label class="block text-xs font-bold text-gray-700">
+    Abono inicial (opcional)
+    <input type="number" name="initial_payment" x-model="initialPayment"
+           :disabled="paymentMethod !== 'CREDIT'" min="0" :max="cartTotal" step="1"
+           inputmode="numeric" placeholder="0"
+           class="mt-1 w-full p-2.5 rounded-lg border border-gray-300 text-sm" />
+  </label>
+  <p class="text-xs text-gray-600">Dinero recibido en esta venta. El resto queda en la cuenta del cliente.</p>
+  <div class="flex justify-between text-sm font-bold text-amber-800">
+    <span>Saldo pendiente:</span>
+    <span x-text="'$' + Math.max(0, cartTotal - (Number(initialPayment) || 0)).toLocaleString('es-CO')"></span>
+  </div>
+</div>

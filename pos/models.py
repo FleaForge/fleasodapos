@@ -445,3 +445,30 @@ class PaymentAllocation(models.Model):
     
     def __str__(self):
         return f"Abono ${self.amount} a Factura #{self.sale.id}"
+
+class Expense(models.Model):
+    CATEGORY_CHOICES = [
+        ('RENT', 'Arriendo / Local'),
+        ('UTILITIES', 'Servicios Públicos (Luz, Agua, Gas)'),
+        ('PAYROLL', 'Nómina / Salarios / Honorarios'),
+        ('INTERNET', 'Internet, Telefonía & Software'),
+        ('TRANSPORT', 'Transporte, Domicilios & Fletes'),
+        ('MAINTENANCE', 'Mantenimiento & Aseo'),
+        ('OTHER', 'Otros Gastos Operativos'),
+    ]
+    
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default='OTHER', verbose_name="Categoría de Gasto")
+    description = models.CharField(max_length=255, verbose_name="Concepto / Descripción")
+    amount = models.IntegerField(default=0, verbose_name="Monto pagado ($ COP)")
+    date = models.DateTimeField(default=timezone.now, verbose_name="Fecha del gasto")
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Registrado por")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date', '-id']
+        verbose_name = 'Gasto Operativo'
+        verbose_name_plural = 'Gastos Operativos'
+
+    def __str__(self):
+        return f"{self.get_category_display()}: ${self.amount:,} ({self.description})"
+
